@@ -6,33 +6,135 @@ import time
 import certifi
 from tqdm import tqdm
 import pandas as pd
+import json
+from datetime import datetime
+
+import urllib3
+# 忽略 SSL 證書警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+"""
+TWSE 財報資料下載與合併工具
+==============================
+
+新增功能說明：
+1. 僅合併模式：設定 only_merge = True，跳過下載直接合併現有的 raw_data 檔案
+2. 欄位過濾：設定 keep_columns 字典來指定每種報表要保留的欄位
+3. 自動排序：合併後的資料會自動依公司代號排序
+
+處理流程：
+1. 下載或讀取 CSV 檔案
+2. 合併所有資料
+3. 過濾指定欄位（如有設定）
+4. 依公司代號排序
+5. 儲存為 CSV/JSON 格式
+
+使用範例：
+---------
+# 一般模式（下載 + 合併）
+only_merge = False
+keep_columns = {}
+
+# 僅合併模式 + 欄位過濾
+only_merge = True
+keep_columns = {
+    'balance_sheet': ['公司代號', '公司名稱', '流動資產', '資產總額'],
+    'income_statement': ['公司代號', '公司名稱', '營業收入', '稅後淨利'],
+    'dividend': ['公司代號名稱', '股東會日期', '股利合計']
+}
+"""
 
 # =========================
-# 設定年份與市場
+# Config
 # =========================
-start_year = 110
-end_year = 114
+start_year = 109
+end_year = 109
 markets = ["sii", "otc"]
 seasons = ["01", "02", "03", "04"]
 
-# 可控制下載的報表類別
-# [] 或 ['all'] 代表下載全部
-download_reports = ['股利']  # ['股利','資產負債表'] 只下載指定報表
+download_reports = ['cash_flow']  # or ['dividend', 'balance_sheet']
+save_format = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
+
+# 新增功能設定
+only_merge = False  # 設為 True 時只做合併，不下載
+
+# 指定要保留的欄位，格式: {'report_name': ['column1', 'column2', ...]}
+# 欄位保留設定範例：
+# keep_columns = {
+#     'balance_sheet': ['公司代號', '公司名稱', '流動資產', '資產總額'],
+#     'income_statement': ['公司代號', '公司名稱', '營業收入', '稅後淨利'],
+#     'dividend': ['公司代號名稱', '股東會日期', '股利合計'],
+#     'cash_flow': ['公司代號', '公司名稱', '營業活動之現金流量']
+# }
+keep_columns = {
+    'balance_sheet': [
+        # 識別與時間序列
+        '公司代號',
+        '公司名稱',
+        '年度',
+        '季別',
+        # 核心計算 (ROE, 盈再率) - 這些欄位已確認存在於 Source [1] 中
+        '歸屬於母公司業主之權益合計',  # ROE 分母
+        '不動產及設備－淨額',       # 盈再率組件
+        '無形資產－淨額',           # 盈再率組件
+        # 風險與輔助資訊 - 這些欄位已確認存在於 Source [1] 中
+        '流動資產',
+        '資產總額',
+        '流動負債',
+        '非流動負債',
+        '非控制權益',
+        '每股參考淨值',
+    ],
+    'income_statement': [
+        # 識別與時間序列
+        '公司代號',
+        '公司名稱',
+        '年度',
+        '季別',
+        '出表日期',
+        # 核心計算 (ROE, 穩定性)
+        '淨利（損）歸屬於母公司業主',
+        '營業收入',
+        '營業成本',
+        # 輔助與相容性
+        '稅後淨利',
+        '基本每股盈餘（元）',
+    ],
+    'dividend': [
+        # 識別與時間序列
+        '公司代號名稱',
+        '股東會日期',
+        '股利所屬年(季)度',
+        # 核心計算 (現金配發/IRR)
+        '股東配發-盈餘分配之現金股利(元/股)',
+        '股東配發-股東配發之現金(股利)總金額(元)',
+        "股東配發-盈餘轉增資配股(元/股)"
+    ],
+    'cash_flow': [
+        # 識別與時間序列
+        '公司代號',
+        '公司名稱',
+        '年度',
+        '季別',
+        # 核心計算 (風險驗證)
+        '營業活動之淨現金流入（流出）',
+    ]
+}
 
 report_types = {
-    "資產負債表": {
+    "balance_sheet": {
         "ajax": "https://mopsov.twse.com.tw/mops/web/ajax_t163sb05?year={year}&TYPEK={market}&season={season}&firstin=1",
         "download_base": "https://mopsov.twse.com.tw/server-java/t105sb02"
     },
-    "股利": {
+    "dividend": {
         "ajax": "https://mopsov.twse.com.tw/server-java/t05st09sub?YEAR={year}&qryType=2&TYPEK={market}&step=1",
         "download_base": "https://mopsov.twse.com.tw/server-java/t105sb02"
     },
-    "損益表": {
+    "income_statement": {
         "ajax": "https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?year={year}&TYPEK={market}&season={season}&firstin=1",
         "download_base": "https://mopsov.twse.com.tw/server-java/t105sb02"
     },
-    "現金流量表": {
+    "cash_flow": {
         "ajax": "https://mopsov.twse.com.tw/mops/web/ajax_t163sb20?year={year}&TYPEK={market}&season={season}&firstin=1",
         "download_base": "https://mopsov.twse.com.tw/server-java/t105sb02"
     }
@@ -40,102 +142,320 @@ report_types = {
 
 headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
 
-base_dir = "csv_downloads"
-merge_dir = os.path.join(base_dir, "merge")
-os.makedirs(base_dir, exist_ok=True)
+base_dir = "raw_data"
+merge_dir = "merged_data"
+log_path = os.path.join(merge_dir, "log.json")
 os.makedirs(merge_dir, exist_ok=True)
 
 # =========================
-# 主流程
+# Helper: sort by company code
+# =========================
+def sort_by_company_code(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
+    """依公司代號排序"""
+    if df.empty:
+        return df
+
+    # 找出公司代號欄位
+    company_code_col = None
+    if "公司代號" in df.columns:
+        company_code_col = "公司代號"
+    elif "公司代號名稱" in df.columns:
+        company_code_col = "公司代號名稱"
+    else:
+        # 嘗試找到包含"公司代號"的欄位
+        for col in df.columns:
+            if "公司代號" in col:
+                company_code_col = col
+                break
+
+    if company_code_col is None:
+        print(f"⚠️ {report_name} 找不到公司代號欄位，跳過排序")
+        return df
+
+    print(f"🔢 {report_name} 依 '{company_code_col}' 排序")
+
+    # 如果是公司代號名稱格式 (例如: "2330 - 台積電")，提取前面的數字進行排序
+    if company_code_col == "公司代號名稱" or " - " in str(df[company_code_col].iloc[0]):
+        # 創建一個臨時欄位用於排序
+        df_sorted = df.copy()
+        df_sorted['_sort_key'] = df_sorted[company_code_col].astype(str).str.extract(r'(\d+)')[0]
+        df_sorted['_sort_key'] = pd.to_numeric(df_sorted['_sort_key'], errors='coerce')
+        df_sorted = df_sorted.sort_values(by='_sort_key', ascending=True, ignore_index=True)
+        df_sorted = df_sorted.drop(columns=['_sort_key'])
+        return df_sorted
+    else:
+        # 直接依公司代號排序
+        df_sorted = df.copy()
+        df_sorted[company_code_col] = pd.to_numeric(df_sorted[company_code_col], errors='coerce')
+        df_sorted = df_sorted.sort_values(by=company_code_col, ascending=True, ignore_index=True)
+        return df_sorted
+
+
+# =========================
+# Helper: filter columns
+# =========================
+def filter_columns(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
+    """根據設定過濾欄位"""
+    if not keep_columns or report_name not in keep_columns:
+        print(f"📋 {report_name} 未設定欄位過濾，保留所有 {len(df.columns)} 欄")
+        return df
+
+    columns_to_keep = keep_columns[report_name]
+    existing_columns = [col for col in columns_to_keep if col in df.columns]
+
+    if existing_columns:
+        missing_columns = set(columns_to_keep) - set(existing_columns)
+        if missing_columns:
+            print(f"⚠️ {report_name} 找不到欄位: {list(missing_columns)}")
+
+        print(f"📋 {report_name} 欄位過濾: {len(df.columns)} → {len(existing_columns)} 欄")
+        print(f"   保留欄位: {existing_columns}")
+        return df[existing_columns].copy()
+    else:
+        print(f"⚠️ {report_name} 找不到任何指定的欄位，保留所有 {len(df.columns)} 欄")
+        return df
+
+
+# =========================
+# Helper: clean + sort dividend CSV
+# =========================
+def clean_and_sort_dividend(path: str) -> pd.DataFrame:
+    """強化版股利報表清理：跳過前置說明行，載入後排序並移除有問題的列"""
+
+    # 先讀取文本找到真正的表頭位置
+    with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
+        lines = f.readlines()
+
+    header_idx = None
+    for i, line in enumerate(lines):
+        # 尋找包含 "公司代號名稱" 或同時包含 "公司代號" 和 "公司名稱" 的表頭行
+        if ("公司代號名稱" in line) or (("公司代號" in line) and ("公司名稱" in line)):
+            if line.count(",") > 2:  # 確保是表格開頭
+                header_idx = i
+                break
+
+    if header_idx is None:
+        print(f"⚠️ 無法在 {os.path.basename(path)} 找到公司代號欄位")
+        return pd.DataFrame()
+
+    # 用 pandas 載入，跳過前面的說明行
+    try:
+        df = pd.read_csv(path, encoding="utf-8-sig", dtype=str, engine="python",
+                        on_bad_lines="skip", skiprows=header_idx)
+    except:
+        print(f"⚠️ 無法讀取 {os.path.basename(path)}")
+        return pd.DataFrame()
+
+    # 檢查是否有資料
+    if df.empty:
+        print(f"⚠️ {os.path.basename(path)} 為空檔案")
+        return pd.DataFrame()
+
+    # 確定第一欄的名稱（可能是 "公司代號名稱" 或 "公司代號"）
+    first_col = df.columns[0]
+    if "公司代號" not in first_col:
+        print(f"⚠️ 無法在 {os.path.basename(path)} 找到公司代號欄位")
+        return pd.DataFrame()
+
+    # 移除全空列
+    df = df.dropna(how="all")
+
+    # 移除 Unnamed 欄位
+    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+
+    # 按第一欄排序（將有問題的列排到一起）
+    df = df.sort_values(by=first_col, ascending=True, ignore_index=True, na_position='last')
+
+    # 移除有問題的列：
+    # 1. 第一欄不包含 " - " 的列（除了表頭）
+    # 2. 第一欄包含表頭文字的重複列
+    # 3. 第一欄為空或只有少量文字的列
+
+    mask_to_keep = pd.Series([True] * len(df))
+
+    for i, val in enumerate(df[first_col]):
+        val_str = str(val).strip()
+
+        # 跳過空值
+        if val_str in ['nan', '', 'None']:
+            mask_to_keep[i] = False
+            continue
+
+        # 移除重複的表頭行
+        if "公司代號" in val_str and not " - " in val_str:
+            mask_to_keep[i] = False
+            continue
+
+        # 移除不包含 " - " 的行（正常的公司代號應該是 "1234 - 公司名稱" 格式）
+        if " - " not in val_str:
+            mask_to_keep[i] = False
+            continue
+
+        # 移除太短的行（可能是斷行造成的）
+        if len(val_str) < 5:
+            mask_to_keep[i] = False
+            continue
+
+    # 套用過濾
+    df_cleaned = df[mask_to_keep].copy()
+
+    # 重新索引
+    df_cleaned.reset_index(drop=True, inplace=True)
+
+    # 最後按正常欄位重新排序
+    sort_cols = []
+    if "公司代號" in df_cleaned.columns:
+        sort_cols = [col for col in ["公司代號", "公司名稱", "股東會日期"] if col in df_cleaned.columns]
+    elif "公司代號名稱" in df_cleaned.columns:
+        sort_cols = [col for col in ["公司代號名稱", "股東會日期"] if col in df_cleaned.columns]
+
+    if sort_cols:
+        df_cleaned = df_cleaned.sort_values(by=sort_cols, ascending=True, ignore_index=True)
+
+    print(f"✅ {os.path.basename(path)} 清理完成，保留 {len(df_cleaned)} 行")
+
+    return df_cleaned
+
+
+
+# =========================
+# Helper: log writer
+# =========================
+def write_log(year, report_name, csv_path, json_path, row_count):
+    log_data = []
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                log_data = json.load(f)
+        except Exception:
+            log_data = []
+
+    entry = {
+        "year": year,
+        "report": report_name,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "files": {
+            "csv": csv_path if csv_path else None,
+            "json": json_path if json_path else None
+        },
+        "total_rows": int(row_count)
+    }
+
+    log_data.append(entry)
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(log_data, f, ensure_ascii=False, indent=2)
+
+
+# =========================
+# Main Process
 # =========================
 for report_name, urls in report_types.items():
-    # 控制下載項目
     if download_reports and 'all' not in download_reports and report_name not in download_reports:
         continue
 
-    print(f"\n=== 開始下載 {report_name} ===")
+    print(f"\n=== Start processing {report_name} ===")
     for year in range(start_year, end_year + 1):
         year_str = str(year)
         year_dir = os.path.join(base_dir, report_name, year_str)
 
-        # 清空年份資料夾
-        if os.path.exists(year_dir):
-            shutil.rmtree(year_dir)
-        os.makedirs(year_dir, exist_ok=True)
-
-        all_filenames = []
-
-        # 抓 Ajax 取得 CSV 名稱
-        for market in markets:
-            for season in seasons:
-                ajax_url = urls["ajax"].format(
-                    year=year_str,
-                    market=market,
-                    season=season
-                ) if report_name != "股利" else urls["ajax"].format(year=year_str, market=market)
-
-                try:
-                    res = requests.get(ajax_url, headers=headers, verify=False, timeout=10)
-                    res.encoding = "utf-8"
-                    soup = BeautifulSoup(res.text, "lxml")
-                    input_tags = soup.find_all("input", {"name": "filename"})
-                    filenames = [tag.get("value") for tag in input_tags if tag.get("value")]
-                    all_filenames.extend(filenames)
-                except Exception as e:
-                    print(f"抓 {year_str} {market} {season} CSV 名稱失敗: {e}")
-                time.sleep(0.5)
-
-        # 去重
-        seen = set()
-        unique_filenames = []
-        for f in all_filenames:
-            if f not in seen:
-                unique_filenames.append(f)
-                seen.add(f)
-
-        print(f"{year_str} 年找到 {len(all_filenames)} 個 CSV，去重後 {len(unique_filenames)} 個")
-
-        # 下載 CSV
-        for fname in tqdm(unique_filenames, desc=f"{year_str} {report_name} 下載進度"):
-            save_path = os.path.join(year_dir, fname)
-            download_url = f"{urls['download_base']}?firstin=true&step=10&filename={fname}"
-
-            for attempt in range(3):
-                try:
-                    r = requests.get(download_url, headers=headers, verify=False, timeout=10)
-                    r.encoding = "big5"
-                    with open(save_path, "w", encoding="utf-8-sig", newline="") as f:
-                        f.write(r.text)
-                    break
-                except Exception as e:
-                    print(f"下載 {fname} 失敗: {e}，第 {attempt+1} 次重試")
-                    time.sleep(2)
-            else:
-                print(f"❌ {fname} 下載失敗，跳過")
-
-        # =========================
-        # 合併成總表放 merge
-        # =========================
-        all_dfs = []
-        for fname in os.listdir(year_dir):
-            if fname.endswith(".csv"):
-                path = os.path.join(year_dir, fname)
-                try:
-                    # 股利特殊讀取方式
-                    if report_name == "股利":
-                        df = pd.read_csv(path, encoding="utf-8-sig", dtype=str, skiprows=1, engine="python")
-                        df = df.dropna(how="all")
-                    else:
-                        df = pd.read_csv(path, encoding="utf-8-sig", dtype=str)
-                    all_dfs.append(df)
-                except Exception as e:
-                    print(f"讀取 {fname} 失敗: {e}")
-
-        if all_dfs:
-            combined_df = pd.concat(all_dfs, ignore_index=True)
-            combined_path = os.path.join(merge_dir, f"{year_str}-{report_name}.csv")
-            combined_df.to_csv(combined_path, index=False, encoding="utf-8-sig")
-            print(f"✅ {year_str} 年 {report_name} 合併完成: {combined_path}")
+        if only_merge:
+            print(f"🔄 僅合併模式: 處理 {year_str} {report_name}")
+            if not os.path.exists(year_dir):
+                print(f"❌ 找不到資料夾: {year_dir}")
+                continue
         else:
-            print(f"❌ {year_str} 年 {report_name} 沒有可合併的 CSV")
-False
+            print(f"⬇️ 下載模式: 處理 {year_str} {report_name}")
+            if os.path.exists(year_dir):
+                shutil.rmtree(year_dir)
+            os.makedirs(year_dir, exist_ok=True)
+
+            all_filenames = []
+
+            # Step 1: 抓 CSV 檔名
+            for market in markets:
+                for season in seasons:
+                    ajax_url = (
+                        urls["ajax"].format(year=year_str, market=market, season=season)
+                        if report_name != "dividend"
+                        else urls["ajax"].format(year=year_str, market=market)
+                    )
+                    try:
+                        res = requests.get(ajax_url, headers=headers, verify=False, timeout=10)
+                        res.encoding = "utf-8"
+                        soup = BeautifulSoup(res.text, "lxml")
+                        input_tags = soup.find_all("input", {"name": "filename"})
+                        filenames = [tag.get("value") for tag in input_tags if tag.get("value")]
+                        all_filenames.extend(filenames)
+                    except Exception as e:
+                        print(f"Fetch {year_str} {market} {season} filenames failed: {e}")
+                    time.sleep(0.5)
+
+            # 去重
+            seen = set()
+            unique_filenames = [f for f in all_filenames if not (f in seen or seen.add(f))]
+            print(f"{year_str} found {len(all_filenames)} CSVs, {len(unique_filenames)} unique")
+
+            # Step 2: 下載
+            for fname in tqdm(unique_filenames, desc=f"{year_str} {report_name} download"):
+                save_path = os.path.join(year_dir, fname)
+                download_url = f"{urls['download_base']}?firstin=true&step=10&filename={fname}"
+                for attempt in range(3):
+                    try:
+                        r = requests.get(download_url, headers=headers, verify=False, timeout=10)
+                        r.encoding = "big5"
+                        with open(save_path, "w", encoding="utf-8-sig", newline="") as f:
+                            f.write(r.text)
+                        break
+                    except Exception as e:
+                        print(f"Download {fname} failed: {e} (try {attempt+1})")
+                        time.sleep(2)
+                else:
+                    print(f"❌ {fname} download failed, skipped")
+
+        # Step 3: 清理與合併 (下載模式和僅合併模式都會執行)
+        all_dfs = []
+        csv_files = [f for f in os.listdir(year_dir) if f.endswith(".csv")]
+        print(f"📁 找到 {len(csv_files)} 個 CSV 檔案")
+
+        for fname in csv_files:
+            path = os.path.join(year_dir, fname)
+            try:
+                if report_name == "dividend":
+                    df = clean_and_sort_dividend(path)
+                else:
+                    df = pd.read_csv(path, encoding="utf-8-sig", dtype=str)
+                    df = df.dropna(how="all")
+
+                # 先不過濾欄位，保留所有資料進行合併
+                all_dfs.append(df)
+            except Exception as e:
+                print(f"Read {fname} failed: {e}")
+
+        # Step 4: 合併後再過濾欄位和排序
+        if all_dfs:
+            # 先合併所有資料
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            print(f"📊 合併完成，總計 {len(combined_df)} 行，{len(combined_df.columns)} 欄")
+
+            # 合併後再過濾欄位
+            combined_df = filter_columns(combined_df, report_name)
+
+            # 依公司代號排序
+            combined_df = sort_by_company_code(combined_df, report_name)
+
+            csv_path = json_path = None
+
+            if "csv" in save_format:
+                csv_path = os.path.join(merge_dir, f"{year_str}-{report_name}.csv")
+                combined_df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+                print(f"✅ CSV saved: {csv_path}")
+
+            if "json" in save_format:
+                json_path = os.path.join(merge_dir, f"{year_str}-{report_name}.json")
+                combined_df.to_json(json_path, orient="records", force_ascii=False, indent=2)
+                print(f"✅ JSON saved: {json_path}")
+
+            write_log(year_str, report_name, csv_path, json_path, len(combined_df))
+            print(f"📝 Log updated for {year_str} {report_name} - Total rows: {len(combined_df)}")
+        else:
+            print(f"❌ {year_str} {report_name} no valid CSVs to merge")
