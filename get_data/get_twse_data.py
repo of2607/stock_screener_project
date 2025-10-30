@@ -48,15 +48,15 @@ keep_columns = {
 # Config
 # =========================
 start_year = 109
-end_year = 109
+end_year = 114
 markets = ["sii", "otc"]
 seasons = ["01", "02", "03", "04"]
 
-download_reports = ['cash_flow']  # or ['dividend', 'balance_sheet']
+download_reports = ['dividend']  # or ['dividend', 'balance_sheet']
 save_format = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
 
 # 新增功能設定
-only_merge = False  # 設為 True 時只做合併，不下載
+only_merge = True  # 設為 True 時只做合併，不下載
 
 # 指定要保留的欄位，格式: {'report_name': ['column1', 'column2', ...]}
 # 欄位保留設定範例：
@@ -105,6 +105,7 @@ keep_columns = {
         '公司代號名稱',
         '股東會日期',
         '股利所屬年(季)度',
+        '股利所屬期間',
         '決議（擬議）進度',
         # 核心計算 (現金配發/IRR)
         '股東配發-盈餘分配之現金股利(元/股)',
