@@ -668,5 +668,145 @@
       "json": "merged_data/109-cash_flow.json"
     },
     "total_rows": 6950
+  },
+  {
+    "year": "109",
+    "report": "dividend",
+    "timestamp": "2025-10-31T00:29:34",
+    "files": {
+      "csv": "merged_data/109-dividend.csv",
+      "json": "merged_data/109-dividend.json"
+    },
+    "total_rows": 7027
+  },
+  {
+    "year": "110",
+    "report": "dividend",
+    "timestamp": "2025-10-31T00:29:34",
+    "files": {
+      "csv": "merged_data/110-dividend.csv",
+      "json": "merged_data/110-dividend.json"
+    },
+    "total_rows": 8176
+  },
+  {
+    "year": "111",
+    "report": "dividend",
+    "timestamp": "2025-10-31T00:29:35",
+    "files": {
+      "csv": "merged_data/111-dividend.csv",
+      "json": "merged_data/111-dividend.json"
+    },
+    "total_rows": 8484
+  },
+  {
+    "year": "112",
+    "report": "dividend",
+    "timestamp": "2025-10-31T00:29:35",
+    "files": {
+      "csv": "merged_data/112-dividend.csv",
+      "json": "merged_data/112-dividend.json"
+    },
+    "total_rows": 8720
+  },
+  {
+    "year": "113",
+    "report": "dividend",
+    "timestamp": "2025-10-31T00:29:35",
+    "files": {
+      "csv": "merged_data/113-dividend.csv",
+      "json": "merged_data/113-dividend.json"
+    },
+    "total_rows": 8780
+  },
+  {
+    "year": "109",
+    "report": "dividend",
+    "timestamp": "2025-10-31T00:59:12",
+    "files": {
+      "csv": "merged_data/109-dividend.csv",
+      "json": "merged_data/109-dividend.json"
+    },
+    "total_rows": 5925
+  },
+  {
+    "year": "109",
+    "report": "dividend",
+    "timestamp": "2025-10-31T00:59:40",
+    "files": {
+      "csv": "merged_data/109-dividend.csv",
+      "json": "merged_data/109-dividend.json"
+    },
+    "total_rows": 5925
+  },
+  {
+    "year": "109",
+    "report": "dividend",
+    "timestamp": "2025-10-31T01:03:18",
+    "files": {
+      "csv": "merged_data/109-dividend.csv",
+      "json": "merged_data/109-dividend.json"
+    },
+    "total_rows": 5925
+  },
+  {
+    "year": "109",
+    "report": "dividend",
+    "timestamp": "2025-10-31T01:08:25",
+    "files": {
+      "csv": "merged_data/109-dividend.csv",
+      "json": "merged_data/109-dividend.json"
+    },
+    "total_rows": 5925
+  },
+  {
+    "year": "110",
+    "report": "dividend",
+    "timestamp": "2025-10-31T01:08:25",
+    "files": {
+      "csv": "merged_data/110-dividend.csv",
+      "json": "merged_data/110-dividend.json"
+    },
+    "total_rows": 8176
+  },
+  {
+    "year": "111",
+    "report": "dividend",
+    "timestamp": "2025-10-31T01:08:25",
+    "files": {
+      "csv": "merged_data/111-dividend.csv",
+      "json": "merged_data/111-dividend.json"
+    },
+    "total_rows": 8484
+  },
+  {
+    "year": "112",
+    "report": "dividend",
+    "timestamp": "2025-10-31T01:08:25",
+    "files": {
+      "csv": "merged_data/112-dividend.csv",
+      "json": "merged_data/112-dividend.json"
+    },
+    "total_rows": 8720
+  },
+  {
+    "year": "113",
+    "report": "dividend",
+    "timestamp": "2025-10-31T01:08:26",
+    "files": {
+      "csv": "merged_data/113-dividend.csv",
+      "json": "merged_data/113-dividend.json"
+    },
+    "total_rows": 8780
+  },
+  {
+    "year": "114",
+    "report": "dividend",
+    "timestamp": "2025-10-31T01:08:26",
+    "files": {
+      "csv": "merged_data/114-dividend.csv",
+      "json": "merged_data/114-dividend.json"
+    },
+    "total_rows": 708
   }
 ]
