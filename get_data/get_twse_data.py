@@ -102,9 +102,9 @@ keep_columns = {
     ],
     'dividend': [
         # 識別與時間序列
-        '公司代號名稱',
+        '公司代號名稱',  # 原始欄位，會被拆分成公司代號和公司名稱
         '股東會日期',
-        '股利所屬年(季)度',
+        '股利所屬年(季)度',  # 原始欄位，會被拆分成年度和季別
         '股利所屬期間',
         '決議（擬議）進度',
         # 核心計算 (現金配發/IRR)
@@ -183,7 +183,7 @@ def sort_by_company_code(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
     print(f"🔢 {report_name} 依 '{company_code_col}' 排序")
 
     # 如果是公司代號名稱格式 (例如: "2330 - 台積電")，提取前面的數字進行排序
-    if company_code_col == "公司代號名稱" or " - " in str(df[company_code_col].iloc[0]):
+    if company_code_col == "公司代號名稱" or (len(df) > 0 and " - " in str(df[company_code_col].iloc[0])):
         # 創建一個臨時欄位用於排序
         df_sorted = df.copy()
         df_sorted['_sort_key'] = df_sorted[company_code_col].astype(str).str.extract(r'(\d+)')[0]
@@ -192,13 +192,136 @@ def sort_by_company_code(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
         df_sorted = df_sorted.drop(columns=['_sort_key'])
         return df_sorted
     else:
-        # 直接依公司代號排序
+        # 直接依公司代號排序（適用於已拆分的公司代號欄位）
+        # 保持公司代號為字串格式，但用數字排序
         df_sorted = df.copy()
-        df_sorted[company_code_col] = pd.to_numeric(df_sorted[company_code_col], errors='coerce')
-        df_sorted = df_sorted.sort_values(by=company_code_col, ascending=True, ignore_index=True)
+
+        # 創建臨時排序鍵，提取公司代號中的數字部分
+        df_sorted['_sort_key'] = df_sorted[company_code_col].astype(str).str.extract(r'(\d+)')[0]
+        df_sorted['_sort_key'] = pd.to_numeric(df_sorted['_sort_key'], errors='coerce')
+
+        # 按數字排序但保持原始字串格式
+        df_sorted = df_sorted.sort_values(by='_sort_key', ascending=True, ignore_index=True)
+        df_sorted = df_sorted.drop(columns=['_sort_key'])
+
         return df_sorted
 
 
+# =========================
+# Helper: process company code name
+# =========================
+def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
+    """
+    處理股利資料表的欄位拆分：
+    1. 公司代號名稱 → 公司代號 + 公司名稱
+    2. 股利所屬年(季)度 → 年度(整數) + 季別(Q1, Q2, Q3, Q4, H1, H2, Y1)
+    
+    Args:
+        df: 資料框
+        report_name: 報表名稱
+        
+    Returns:
+        處理後的資料框
+    """
+    if df.empty:
+        return df
+    
+    # 只處理股利資料表
+    if report_name == "dividend":
+        df_processed = df.copy()
+        
+        # 1. 拆分公司代號名稱欄位
+        if "公司代號名稱" in df_processed.columns:
+            print(f"🔧 {report_name} 正在拆分公司代號名稱欄位...")
+            
+            # 拆分公司代號名稱 (格式: "1234 - 公司名稱")
+            company_info = df_processed["公司代號名稱"].str.split(" - ", n=1, expand=True)
+            
+            # 新增公司代號和公司名稱欄位
+            df_processed["公司代號"] = company_info[0].str.strip()
+            df_processed["公司名稱"] = company_info[1].str.strip()
+            
+            # 移除原始的公司代號名稱欄位
+            df_processed = df_processed.drop(columns=["公司代號名稱"])
+            
+            print(f"✅ 成功拆分公司代號名稱欄位")
+        
+        # 2. 拆分股利所屬年(季)度欄位
+        if "股利所屬年(季)度" in df_processed.columns:
+            print(f"🔧 {report_name} 正在拆分股利所屬年(季)度欄位...")
+            
+            # 提取年度 (例如: "113年 年度" → 113)
+            df_processed["年度"] = df_processed["股利所屬年(季)度"].str.extract(r'(\d+)年')[0]
+            df_processed["年度"] = pd.to_numeric(df_processed["年度"], errors='coerce').astype('Int64')
+            
+            # 提取季別並標準化
+            def standardize_period(period_str):
+                if pd.isna(period_str):
+                    return None
+                
+                period_str = str(period_str).strip()
+                
+                # 年度
+                if "年度" in period_str:
+                    return "YEAR"
+                # 季度
+                elif "第1季" in period_str:
+                    return "Q1"
+                elif "第2季" in period_str:
+                    return "Q2"
+                elif "第3季" in period_str:
+                    return "Q3"
+                elif "第4季" in period_str:
+                    return "Q4"
+                # 半年
+                elif "上半年" in period_str:
+                    return "H1"
+                elif "下半年" in period_str:
+                    return "H2"
+                # 月份 (如果有的話)
+                elif "月" in period_str:
+                    month_match = pd.Series([period_str]).str.extract(r'第?(\d+)月')[0].iloc[0]
+                    if month_match:
+                        return f"M{month_match.zfill(2)}"
+                
+                return "OTHER"
+            
+            df_processed["季別"] = df_processed["股利所屬年(季)度"].apply(standardize_period)
+            
+            # 移除原始的股利所屬年(季)度欄位
+            df_processed = df_processed.drop(columns=["股利所屬年(季)度"])
+            
+            print(f"✅ 成功拆分股利所屬年(季)度欄位")
+        
+        # 3. 重新排列欄位順序
+        cols = df_processed.columns.tolist()
+        
+        # 確定新欄位的順序：公司代號、公司名稱、年度、季別
+        priority_cols = []
+        if "公司代號" in cols:
+            priority_cols.append("公司代號")
+            cols.remove("公司代號")
+        if "公司名稱" in cols:
+            priority_cols.append("公司名稱")
+            cols.remove("公司名稱")
+        if "年度" in cols:
+            priority_cols.append("年度")
+            cols.remove("年度")
+        if "季別" in cols:
+            priority_cols.append("季別")
+            cols.remove("季別")
+        
+        # 重新組合欄位順序
+        new_cols = priority_cols + cols
+        df_processed = df_processed[new_cols]
+        
+        print(f"✅ {report_name} 欄位處理完成")
+        print(f"   新增欄位: {', '.join(priority_cols)}")
+        
+        return df_processed
+    else:
+        # 其他報表直接返回原資料框
+        return df
 # =========================
 # Helper: filter columns
 # =========================
@@ -447,6 +570,9 @@ for report_name, urls in report_types.items():
 
             # 合併後再過濾欄位
             combined_df = filter_columns(combined_df, report_name)
+
+            # 整理欄位：將股利資料表的"公司代號名稱"分成"公司代號"和"公司名稱"兩欄
+            combined_df = process_company_code_name(combined_df, report_name)
 
             # 依公司代號排序
             combined_df = sort_by_company_code(combined_df, report_name)
