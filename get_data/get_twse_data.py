@@ -52,7 +52,7 @@ end_year = 114
 markets = ["sii", "otc"]
 seasons = ["01", "02", "03", "04"]
 
-download_reports = ['dividend']  # or ['dividend', 'balance_sheet']
+download_reports = ['all']  # or ['dividend', 'balance_sheet']
 save_format = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
 
 # 新增功能設定
@@ -212,58 +212,67 @@ def sort_by_company_code(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
 # =========================
 def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
     """
-    處理股利資料表的欄位拆分：
-    1. 公司代號名稱 → 公司代號 + 公司名稱
-    2. 股利所屬年(季)度 → 年度(整數) + 季別(Q1, Q2, Q3, Q4, H1, H2, Y1)
-    
+    處理各類報表的欄位標準化：
+    1. 股利資料表：
+       - 公司代號名稱 → 公司代號 + 公司名稱
+       - 股利所屬年(季)度 → 年度(整數) + 季別(Q1, Q2, Q3, Q4, H1, H2, Y1)
+    2. 其他報表（balance_sheet、cash_flow、income_statement）：
+       - 季別格式標準化：1, 2, 3, 4 → Q1, Q2, Q3, Q4
+       - 確保公司代號為文字格式
+
     Args:
         df: 資料框
         report_name: 報表名稱
-        
+
     Returns:
         處理後的資料框
     """
     if df.empty:
         return df
-    
-    # 只處理股利資料表
+
+    df_processed = df.copy()
+
+    # 通用處理：確保公司代號為文字格式
+    if "公司代號" in df_processed.columns:
+        df_processed["公司代號"] = df_processed["公司代號"].astype(str)
+
+    # 股利資料表專屬處理
     if report_name == "dividend":
-        df_processed = df.copy()
-        
+
         # 1. 拆分公司代號名稱欄位
         if "公司代號名稱" in df_processed.columns:
             print(f"🔧 {report_name} 正在拆分公司代號名稱欄位...")
-            
+
             # 拆分公司代號名稱 (格式: "1234 - 公司名稱")
             company_info = df_processed["公司代號名稱"].str.split(" - ", n=1, expand=True)
-            
+
             # 新增公司代號和公司名稱欄位
             df_processed["公司代號"] = company_info[0].str.strip()
             df_processed["公司名稱"] = company_info[1].str.strip()
-            
+
             # 移除原始的公司代號名稱欄位
             df_processed = df_processed.drop(columns=["公司代號名稱"])
-            
+
             print(f"✅ 成功拆分公司代號名稱欄位")
-        
+
         # 2. 拆分股利所屬年(季)度欄位
         if "股利所屬年(季)度" in df_processed.columns:
             print(f"🔧 {report_name} 正在拆分股利所屬年(季)度欄位...")
-            
+
             # 提取年度 (例如: "113年 年度" → 113)
             df_processed["年度"] = df_processed["股利所屬年(季)度"].str.extract(r'(\d+)年')[0]
             df_processed["年度"] = pd.to_numeric(df_processed["年度"], errors='coerce').astype('Int64')
-            
+
             # 提取季別並標準化
-            def standardize_period(period_str):
+            def standardize_dividend_period(period_str):
                 if pd.isna(period_str):
                     return None
-                
+
                 period_str = str(period_str).strip()
-                
+
                 # 年度
                 if "年度" in period_str:
-                    return "YEAR"
+                    return "Y1"
                 # 季度
                 elif "第1季" in period_str:
                     return "Q1"
@@ -283,19 +292,19 @@ def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFram
                     month_match = pd.Series([period_str]).str.extract(r'第?(\d+)月')[0].iloc[0]
                     if month_match:
                         return f"M{month_match.zfill(2)}"
-                
+
                 return "OTHER"
-            
-            df_processed["季別"] = df_processed["股利所屬年(季)度"].apply(standardize_period)
-            
+
+            df_processed["季別"] = df_processed["股利所屬年(季)度"].apply(standardize_dividend_period)
+
             # 移除原始的股利所屬年(季)度欄位
             df_processed = df_processed.drop(columns=["股利所屬年(季)度"])
-            
+
             print(f"✅ 成功拆分股利所屬年(季)度欄位")
-        
-        # 3. 重新排列欄位順序
+
+        # 重新排列欄位順序（僅限股利報表）
         cols = df_processed.columns.tolist()
-        
+
         # 確定新欄位的順序：公司代號、公司名稱、年度、季別
         priority_cols = []
         if "公司代號" in cols:
@@ -310,18 +319,44 @@ def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFram
         if "季別" in cols:
             priority_cols.append("季別")
             cols.remove("季別")
-        
+
         # 重新組合欄位順序
         new_cols = priority_cols + cols
         df_processed = df_processed[new_cols]
-        
+
         print(f"✅ {report_name} 欄位處理完成")
-        print(f"   新增欄位: {', '.join(priority_cols)}")
-        
-        return df_processed
-    else:
-        # 其他報表直接返回原資料框
-        return df
+
+    # 其他報表（balance_sheet、cash_flow、income_statement）處理
+    elif report_name in ["balance_sheet", "cash_flow", "income_statement"]:
+
+        # 標準化季別格式：1, 2, 3, 4 → Q1, Q2, Q3, Q4
+        if "季別" in df_processed.columns:
+            print(f"🔧 {report_name} 正在標準化季別格式...")
+
+            def standardize_quarter(quarter_val):
+                if pd.isna(quarter_val):
+                    return None
+
+                quarter_str = str(quarter_val).strip()
+
+                if quarter_str == "1":
+                    return "Q1"
+                elif quarter_str == "2":
+                    return "Q2"
+                elif quarter_str == "3":
+                    return "Q3"
+                elif quarter_str == "4":
+                    return "Q4"
+                else:
+                    return quarter_str  # 保持原值如果不是1-4
+
+            df_processed["季別"] = df_processed["季別"].apply(standardize_quarter)
+
+            print(f"✅ {report_name} 季別標準化完成：1,2,3,4 → Q1,Q2,Q3,Q4")
+
+    return df_processed
+
+
 # =========================
 # Helper: filter columns
 # =========================
