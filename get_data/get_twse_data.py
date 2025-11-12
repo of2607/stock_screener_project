@@ -393,6 +393,64 @@ def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFram
     new_cols = priority_cols + cols
     df_processed = df_processed[new_cols]
 
+    # 6. 數值欄位轉換
+    numeric_columns = {
+        'balance_sheet': [
+            '歸屬於母公司業主之權益合計',
+            '不動產及設備－淨額',
+            '無形資產－淨額',
+            '流動資產',
+            '資產總額',
+            '流動負債',
+            '非流動負債',
+            '非控制權益',
+            '每股參考淨值'
+        ],
+        'income_statement': [
+            '淨利（損）歸屬於母公司業主',
+            '營業收入',
+            '營業成本',
+            '稅後淨利',
+            '基本每股盈餘（元）'
+        ],
+        'dividend': [
+            '股東配發-盈餘分配之現金股利(元/股)',
+            '股東配發-法定盈餘公積發放之現金(元/股)',
+            '股東配發-資本公積發放之現金(元/股)',
+            '股東配發-股東配發之現金(股利)總金額(元)',
+            '股東配發-盈餘轉增資配股(元/股)',
+            '股東配發-法定盈餘公積轉增資配股(元/股)',
+            '股東配發-資本公積轉增資配股(元/股)',
+            '股東配發-股東配股總股數(股)'
+        ],
+        'cash_flow': [
+            '營業活動之淨現金流入（流出）'
+        ],
+        'etf_dividend': [
+            '配息',
+            '公告年度'
+        ]
+    }
+
+    if report_name in numeric_columns:
+        columns_to_convert = numeric_columns[report_name]
+        existing_numeric_cols = [col for col in columns_to_convert if col in df_processed.columns]
+
+        if existing_numeric_cols:
+            print(f"   轉換數值欄位: {existing_numeric_cols}")
+            for col in existing_numeric_cols:
+                # 清理數值：移除逗號、空格、特殊字符
+                df_processed[col] = df_processed[col].astype(str).str.replace(',', '')
+                df_processed[col] = df_processed[col].str.replace(' ', '')
+                df_processed[col] = df_processed[col].str.replace('--', '')
+                df_processed[col] = df_processed[col].str.replace('-', '')
+                df_processed[col] = df_processed[col].replace(['', 'nan', 'None', 'null'], None)
+
+                # 轉換為數值
+                df_processed[col] = pd.to_numeric(df_processed[col], errors='coerce')
+
+            print(f"   ✅ 成功轉換 {len(existing_numeric_cols)} 個數值欄位")
+
     print(f"✅ {report_name} 欄位處理完成，統一格式：代號、名稱、年度(民國)、季別")
 
     return df_processed
@@ -755,9 +813,24 @@ def process_etf_dividend_data(df, year_str):
     if '名稱' in df_processed.columns:
         df_processed['名稱'] = df_processed['名稱'].astype(str)
 
-    # 5. 處理配息欄位
-    if '配息' in df_processed.columns:
-        df_processed['配息'] = df_processed['配息'].replace('', None)
+    # 5. 數值欄位轉換
+    numeric_columns = ['配息', '公告年度']
+    existing_numeric_cols = [col for col in numeric_columns if col in df_processed.columns]
+
+    if existing_numeric_cols:
+        print(f"   轉換數值欄位: {existing_numeric_cols}")
+        for col in existing_numeric_cols:
+            # 清理數值：移除逗號、空格、特殊字符
+            df_processed[col] = df_processed[col].astype(str).str.replace(',', '')
+            df_processed[col] = df_processed[col].str.replace(' ', '')
+            df_processed[col] = df_processed[col].str.replace('--', '')
+            df_processed[col] = df_processed[col].str.replace('-', '')
+            df_processed[col] = df_processed[col].replace(['', 'nan', 'None', 'null'], None)
+
+            # 轉換為數值
+            df_processed[col] = pd.to_numeric(df_processed[col], errors='coerce')
+
+        print(f"   ✅ 成功轉換 {len(existing_numeric_cols)} 個數值欄位")
 
     # 6. 重新排列欄位順序 (與dividend同步)
     cols = df_processed.columns.tolist()
