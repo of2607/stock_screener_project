@@ -92,7 +92,7 @@ class ReportProcessor:
             df = self.csv_cleaner.clean_etf_dividend_csv(file_path)
             if not df.empty:
                 # 使用 data_standardizer 處理 ETF 資料
-                df = self.data_standardizer.process_etf_dividend_data(df, year_str)
+                df = self.data_standardizer._process_etf_dividend_data(df, year_str)
             return df
         else:
             return self.csv_cleaner.clean_standard_csv(file_path)

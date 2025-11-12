@@ -19,10 +19,30 @@ class DataStandardizer:
             logger: 日誌記錄器
         """
         self.logger = logger
+        
+        # 預編譯正則表達式以提高效能
+        self._date_patterns = [
+            re.compile(r'(\d+)年(\d+)月'),  # 114年01月22日
+            re.compile(r'(\d{4})[/-](\d{1,2})[/-]'),  # 2024/01/22 or 2024-01-22
+            re.compile(r'(\d{1,2})[/-](\d{1,2})')  # 01/22
+        ]
+        self._year_pattern = re.compile(r'(\d+)年')
+        self._month_pattern = re.compile(r'第?(\d+)月')
+        
+        # 期間標準化映射 - 按優先級排序
+        self._period_mapping = {
+            # 年度映射（最高優先級）
+            "年度": "Y1",
+            # 半年映射（高優先級）
+            "上半年": "H1", 
+            "下半年": "H2",
+            # 季度映射（低優先級）
+            **{f"第{i}季": f"Q{i}" for i in range(1, 5)}
+        }
     
     def standardize_data(self, df: pd.DataFrame, report_type: str) -> pd.DataFrame:
         """
-        標準化資料格式
+        標準化資料格式 - 增強錯誤處理
         
         Args:
             df: 要標準化的資料框
@@ -34,33 +54,45 @@ class DataStandardizer:
         if df.empty:
             return df
         
-        self.logger.debug(f"{report_type} 正在處理欄位標準化...")
+        try:
+            self.logger.debug(f"{report_type} 正在處理欄位標準化...")
+            
+            df_processed = df.copy()
+            
+            # 使用鏈式處理，每步都可能拋出異常
+            processing_steps = [
+                ("重新命名欄位", lambda x: self._rename_columns(x, report_type)),
+                ("標準化年度格式", self._standardize_year_format),
+                ("特殊資料處理", lambda x: self._process_by_report_type(x, report_type)),
+                ("重新排列欄位", self._reorder_columns),
+                ("轉換數值欄位", lambda x: self._convert_numeric_columns(x, report_type))
+            ]
+            
+            for step_name, step_func in processing_steps:
+                try:
+                    df_processed = step_func(df_processed)
+                except Exception as e:
+                    self.logger.error(f"{report_type} {step_name}失敗: {str(e)}")
+                    raise
+            
+            self.logger.success(f"{report_type} 欄位處理完成，統一格式：代號、名稱、年度(民國)、季別")
+            return df_processed
+            
+        except Exception as e:
+            self.logger.error(f"{report_type} 資料標準化失敗: {str(e)}")
+            return df  # 返回原始資料而非空資料框
+    
+    def _process_by_report_type(self, df: pd.DataFrame, report_type: str) -> pd.DataFrame:
+        """根據報表類型進行特殊處理"""
+        processors = {
+            "dividend": self._process_dividend_data,
+            "balance_sheet": self._process_financial_statement_data,
+            "cash_flow": self._process_financial_statement_data,
+            "income_statement": self._process_financial_statement_data
+        }
         
-        df_processed = df.copy()
-        
-        # 1. 重新命名欄位
-        df_processed = self._rename_columns(df_processed, report_type)
-        
-        # 2. 標準化年度格式
-        df_processed = self._standardize_year_format(df_processed)
-        
-        # 3. 根據報表類型進行特殊處理
-        if report_type == "dividend":
-            df_processed = self._process_dividend_data(df_processed)
-        elif report_type == "etf_dividend":
-            df_processed = self._process_etf_dividend_data(df_processed)
-        elif report_type in ["balance_sheet", "cash_flow", "income_statement"]:
-            df_processed = self._process_financial_statement_data(df_processed)
-        
-        # 4. 重新排列欄位順序
-        df_processed = self._reorder_columns(df_processed)
-        
-        # 5. 轉換數值欄位
-        df_processed = self._convert_numeric_columns(df_processed, report_type)
-        
-        self.logger.success(f"{report_type} 欄位處理完成，統一格式：代號、名稱、年度(民國)、季別")
-        
-        return df_processed
+        processor = processors.get(report_type)
+        return processor(df) if processor else df
     
     def _rename_columns(self, df: pd.DataFrame, report_type: str) -> pd.DataFrame:
         """重新命名欄位"""
@@ -119,84 +151,61 @@ class DataStandardizer:
         return df
     
     def _standardize_dividend_period(self, period_str) -> str:
-        """標準化股利期間格式"""
+        """標準化股利期間格式 - 精確匹配版本"""
         if pd.isna(period_str):
             return None
         
         period_str = str(period_str).strip()
         
-        # 年度
+        # 精確匹配，按優先級順序
+        # 1. 年度 (例如: "111年 年度")
         if "年度" in period_str:
             return "Y1"
-        # 季度
-        elif "第1季" in period_str:
-            return "Q1"
-        elif "第2季" in period_str:
-            return "Q2"
-        elif "第3季" in period_str:
-            return "Q3"
-        elif "第4季" in period_str:
-            return "Q4"
-        # 半年
-        elif "上半年" in period_str:
+        
+        # 2. 半年 (例如: "111年 上半年", "111年 下半年")
+        if "上半年" in period_str:
             return "H1"
-        elif "下半年" in period_str:
+        if "下半年" in period_str:
             return "H2"
-        # 月份
-        elif "月" in period_str:
-            month_match = pd.Series([period_str]).str.extract(r'第?(\d+)月')[0].iloc[0]
-            if month_match:
-                return f"M{month_match.zfill(2)}"
+        
+        # 3. 季度 - 使用更精確的匹配 (例如: "111年 第1季")
+        for i in range(1, 5):
+            if f"第{i}季" in period_str:
+                return f"Q{i}"
+        
+        # 4. 月份處理 (例如: "111年 第1月")
+        month_match = self._month_pattern.search(period_str)
+        if month_match:
+            month = month_match.group(1)
+            return f"M{month}"
+        
+        # 5. 僅數字的季度匹配（最後檢查，避免誤判）
+        if period_str in ["1", "2", "3", "4"]:
+            return f"Q{period_str}"
         
         return "OTHER"
     
-    def _process_etf_dividend_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """處理 ETF 股利資料"""
-        # 設定年度 (從外部傳入或從日期推算)
-        # 這裡簡化處理，實際應該從除息交易日推算
-        
-        # 季別處理：依除息交易日判斷月份
-        if '除息交易日' in df.columns:
-            self.logger.debug("   正在分析除息交易日以判斷月份...")
-            df['季別'] = df['除息交易日'].apply(self._determine_month_from_date)
-        else:
-            df['季別'] = "OTHER"
-            self.logger.debug("   無除息交易日欄位，季別設為 OTHER")
-        
-        return df
+
     
     def _determine_month_from_date(self, date_str) -> str:
-        """從除息交易日判斷月份"""
+        """從除息交易日判斷月份 - 優化版本"""
         if pd.isna(date_str) or date_str == '':
             return None
         
         date_str = str(date_str).strip()
         
-        # 匹配各種日期格式中的月份
-        month_patterns = [
-            r'(\d+)年(\d+)月',  # 114年01月22日
-            r'(\d{4})[/-](\d{1,2})[/-]',  # 2024/01/22 或 2024-01-22
-            r'(\d{1,2})[/-](\d{1,2})',  # 01/22
-        ]
-        
-        month = None
-        for pattern in month_patterns:
-            match = re.search(pattern, date_str)
+        # 使用預編譯的正則表達式
+        for i, pattern in enumerate(self._date_patterns):
+            match = pattern.search(date_str)
             if match:
-                if '年' in pattern:
-                    month = int(match.group(2))  # 月份是第二組
-                else:
+                if i == 0:  # 年月格式
+                    month = int(match.group(2))
+                else:  # 其他格式
                     month = int(match.group(2)) if len(match.groups()) > 1 else int(match.group(1))
-                break
+                
+                return f"M{month}" if 1 <= month <= 12 else "OTHER"
         
-        if month is None:
-            return "OTHER"
-        
-        # 根據月份返回格式
-        if 1 <= month <= 12:
-            return f"M{month:02d}"  # M01, M02, ..., M12
-        else:
-            return "OTHER"
+        return "OTHER"
     
     def _process_financial_statement_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """處理財務報表資料 (資產負債表、損益表、現金流量表)"""
@@ -253,50 +262,45 @@ class DataStandardizer:
         return df
     
     def _clean_and_convert_numeric(self, series: pd.Series) -> pd.Series:
-        """清理並轉換數值"""
-        # 清理數值：移除逗號、空格、特殊字符
+        """清理並轉換數值 - 優化版本"""
+        # 使用單一正則表達式替換多個字符，提升效能
         cleaned = (
             series.astype(str)
-            .str.replace(',', '')
-            .str.replace(' ', '')
-            .str.replace('--', '')
-            .str.replace('-', '')
+            .str.replace(r'[,\s\-]+', '', regex=True)
             .replace(['', 'nan', 'None', 'null'], None)
         )
         
         # 轉換為數值
         return pd.to_numeric(cleaned, errors='coerce')
     
-    def process_etf_dividend_data(self, df: pd.DataFrame, year_str: str) -> pd.DataFrame:
-        """處理 ETF 股利資料 - 與原始版本完全一致的邏輯"""
+    def _process_etf_dividend_data(self, df: pd.DataFrame, year_str: str) -> pd.DataFrame:
+        """處理 ETF 股利資料"""
         if df.empty:
             return df
 
+        self.logger.debug("ETF 股利資料處理中...")
         df_processed = df.copy()
-
-        self.logger.debug(f"ETF 股利資料處理中...")
-
+        
         # 1. 欄位重新命名 (與dividend格式同步)
-        if '證券代號' in df_processed.columns:
-            df_processed = df_processed.rename(columns={'證券代號': '代號'})
-            self.logger.debug(f"   證券代號 → 代號")
-
-        if '證券簡稱' in df_processed.columns:
-            df_processed = df_processed.rename(columns={'證券簡稱': '名稱'})
-            self.logger.debug(f"   證券簡稱 → 名稱")
-
-        if '收益分配金額 (每1受益權益單位)' in df_processed.columns:
-            df_processed = df_processed.rename(columns={'收益分配金額 (每1受益權益單位)': '配息'})
-            self.logger.debug(f"   收益分配金額 (每1受益權益單位) → 配息")
-
+        column_mappings = {
+            '證券代號': '代號',
+            '證券簡稱': '名稱',
+            '收益分配金額 (每1受益權益單位)': '配息'
+        }
+        
+        for old_col, new_col in column_mappings.items():
+            if old_col in df_processed.columns:
+                df_processed = df_processed.rename(columns={old_col: new_col})
+                self.logger.debug(f"   {old_col} → {new_col}")
+        
         # 2. 年度處理：保持民國年格式
         roc_year = int(year_str)
-        df_processed['年度'] = roc_year  # 直接使用民國年
+        df_processed['年度'] = roc_year
         self.logger.debug(f"   年度設為: {roc_year} (民國年)")
-
-        # 3. 季別處理：依除息交易日判斷月份 (參考dividend格式)
+        
+        # 3. 季別處理：依除息交易日判斷月份
         if '除息交易日' in df_processed.columns:
-            self.logger.debug(f"   正在分析除息交易日以判斷月份...")
+            self.logger.debug("   正在分析除息交易日以判斷月份...")
             df_processed['季別'] = df_processed['除息交易日'].apply(self._determine_month_from_date)
             
             # 統計月份分布
@@ -304,65 +308,19 @@ class DataStandardizer:
             self.logger.debug(f"   月份分布: {dict(month_counts)}")
         else:
             df_processed['季別'] = "OTHER"
-            self.logger.debug(f"   無除息交易日欄位，季別設為 OTHER")
-
+            self.logger.debug("   無除息交易日欄位，季別設為 OTHER")
+        
         # 4. 確保關鍵欄位格式正確
         if '代號' in df_processed.columns:
             df_processed['代號'] = df_processed['代號'].astype(str)
-
+        
         if '名稱' in df_processed.columns:
             df_processed['名稱'] = df_processed['名稱'].astype(str)
-
-        # 5. 數值欄位轉換
-        numeric_columns = ['配息', '公告年度']
-        existing_numeric_cols = [col for col in numeric_columns if col in df_processed.columns]
-
-        if existing_numeric_cols:
-            self.logger.debug(f"   轉換數值欄位: {existing_numeric_cols}")
-            for col in existing_numeric_cols:
-                df_processed[col] = self._clean_and_convert_numeric(df_processed[col])
-            self.logger.success(f"   成功轉換 {len(existing_numeric_cols)} 個數值欄位")
-
-        # 6. 重新排列欄位順序 (與dividend同步)
+        
+        # 5. 重新排列欄位順序和數值轉換
         df_processed = self._reorder_columns(df_processed)
-
+        df_processed = self._convert_numeric_columns(df_processed, "etf_dividend")
+        
         self.logger.success(f"ETF 股利資料處理完成: {len(df_processed)} 筆")
-        self.logger.debug(f"   最終欄位順序: {df_processed.columns.tolist()[:6]}...")  # 顯示前6個欄位
-
         return df_processed
     
-    def _determine_month_from_date(self, date_str) -> str:
-        """從除息交易日判斷月份"""
-        if pd.isna(date_str) or date_str == '':
-            return None
-
-        date_str = str(date_str).strip()
-
-        # 嘗試提取月份
-        import re
-        
-        # 匹配各種日期格式中的月份
-        month_patterns = [
-            r'(\d+)年(\d+)月',  # 114年01月22日
-            r'(\d{4})[/-](\d{1,2})[/-]',  # 2024/01/22 或 2024-01-22
-            r'(\d{1,2})[/-](\d{1,2})',  # 01/22
-        ]
-
-        month = None
-        for pattern in month_patterns:
-            match = re.search(pattern, date_str)
-            if match:
-                if '年' in pattern:
-                    month = int(match.group(2))  # 月份是第二組
-                else:
-                    month = int(match.group(2)) if len(match.groups()) > 1 else int(match.group(1))
-                break
-
-        if month is None:
-            return "OTHER"
-
-        # 根據月份返回格式 (參考dividend的M{月份}格式)
-        if 1 <= month <= 12:
-            return f"M{month:02d}"  # M01, M02, ..., M12
-        else:
-            return "OTHER"
