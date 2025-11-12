@@ -47,12 +47,12 @@ keep_columns = {
 # =========================
 # Config
 # =========================
-start_year = 109
+start_year = 107
 end_year = 114
 markets = ["sii", "otc"]
 seasons = ["01", "02", "03", "04"]
 
-download_reports = ['all']  # or ['dividend', 'balance_sheet']
+download_reports = ['all']  # 處理所有報表類型
 save_format = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
 
 # 新增功能設定
@@ -68,10 +68,10 @@ only_merge = True  # 設為 True 時只做合併，不下載
 # }
 keep_columns = {
     'balance_sheet': [
-        # 識別與時間序列
-        '公司代號',
-        '公司名稱',
-        '年度',
+        # 識別與時間序列 (使用處理後的統一格式)
+        '代號',     # 處理後：公司代號 → 代號
+        '名稱',     # 處理後：公司名稱 → 名稱
+        '年度',     # 處理後：民國年度格式
         '季別',
         # 核心計算 (ROE, 盈再率) - 這些欄位已確認存在於 Source [1] 中
         '歸屬於母公司業主之權益合計',  # ROE 分母
@@ -86,10 +86,10 @@ keep_columns = {
         '每股參考淨值',
     ],
     'income_statement': [
-        # 識別與時間序列
-        '公司代號',
-        '公司名稱',
-        '年度',
+        # 識別與時間序列 (使用處理後的統一格式)
+        '代號',     # 處理後：公司代號 → 代號
+        '名稱',     # 處理後：公司名稱 → 名稱
+        '年度',     # 處理後：民國年度格式
         '季別',
         '出表日期',
         # 核心計算 (ROE, 穩定性)
@@ -101,10 +101,12 @@ keep_columns = {
         '基本每股盈餘（元）',
     ],
     'dividend': [
-        # 識別與時間序列
-        '公司代號名稱',  # 原始欄位，會被拆分成公司代號和公司名稱
+        # 識別與時間序列 (使用處理後的統一格式)
+        '代號',        # 處理後：公司代號名稱 → 代號
+        '名稱',        # 處理後：公司代號名稱 → 名稱
+        '年度',        # 處理後：民國年度格式
+        '季別',        # 處理後：標準化格式
         '股東會日期',
-        '股利所屬年(季)度',  # 原始欄位，會被拆分成年度和季別
         '股利所屬期間',
         '決議（擬議）進度',
         # 核心計算 (現金配發/IRR)
@@ -112,20 +114,35 @@ keep_columns = {
         '股東配發-法定盈餘公積發放之現金(元/股)',
         '股東配發-資本公積發放之現金(元/股)',
         '股東配發-股東配發之現金(股利)總金額(元)',
-        # 配股相關
+        # 配股相關  
         '股東配發-盈餘轉增資配股(元/股)',
         '股東配發-法定盈餘公積轉增資配股(元/股)',
         '股東配發-資本公積轉增資配股(元/股)',
         '股東配發-股東配股總股數(股)'
     ],
     'cash_flow': [
-        # 識別與時間序列
-        '公司代號',
-        '公司名稱',
-        '年度',
+        # 識別與時間序列 (使用處理後的統一格式)
+        '代號',     # 處理後：公司代號 → 代號
+        '名稱',     # 處理後：公司名稱 → 名稱
+        '年度',     # 處理後：民國年度格式
         '季別',
         # 核心計算 (風險驗證)
         '營業活動之淨現金流入（流出）',
+    ],
+    'etf_dividend': [
+        # 識別與時間序列 (使用處理後的統一格式)
+        '代號',        # 處理後：證券代號 → 代號
+        '名稱',        # 處理後：證券簡稱 → 名稱
+        '年度',        # 處理後：民國年度格式
+        '季別',        # 處理後：依除息交易日判斷
+        # 日期資訊
+        '除息交易日',
+        '收益分配基準日',
+        '收益分配發放日',
+        # 收益資訊
+        '收益分配金額 (每1受益權益單位)',
+        '收益分配標準 (102年度起啟用)',
+        '公告年度'
     ]
 }
 
@@ -145,6 +162,10 @@ report_types = {
     "cash_flow": {
         "ajax": "https://mopsov.twse.com.tw/mops/web/ajax_t163sb20?year={year}&TYPEK={market}&season={season}&firstin=1",
         "download_base": "https://mopsov.twse.com.tw/server-java/t105sb02"
+    },
+    "etf_dividend": {
+        "url": "https://www.twse.com.tw/rwd/zh/ETF/etfDiv?stkNo=&startDate={start_date}&endDate={end_date}&response=json",
+        "csv_export": "https://www.twse.com.tw/rwd/zh/ETF/etfDiv?stkNo=&startDate={start_date}&endDate={end_date}&response=csv"
     }
 }
 
@@ -152,8 +173,14 @@ headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
 
 base_dir = "raw_data"
 merge_dir = "merged_data"
+csv_output_dir = os.path.join(merge_dir, "csv")
+json_output_dir = os.path.join(merge_dir, "json")
 log_path = os.path.join(merge_dir, "log.json")
+
+# 建立輸出目錄
 os.makedirs(merge_dir, exist_ok=True)
+os.makedirs(csv_output_dir, exist_ok=True)
+os.makedirs(json_output_dir, exist_ok=True)
 
 # =========================
 # Helper: sort by company code
@@ -163,21 +190,23 @@ def sort_by_company_code(df: pd.DataFrame, report_name: str) -> pd.DataFrame:
     if df.empty:
         return df
 
-    # 找出公司代號欄位
+    # 找出代號欄位 (統一格式)
     company_code_col = None
-    if "公司代號" in df.columns:
+    if "代號" in df.columns:
+        company_code_col = "代號"
+    elif "公司代號" in df.columns:
         company_code_col = "公司代號"
     elif "公司代號名稱" in df.columns:
         company_code_col = "公司代號名稱"
     else:
-        # 嘗試找到包含"公司代號"的欄位
+        # 嘗試找到包含"代號"或"公司代號"的欄位
         for col in df.columns:
-            if "公司代號" in col:
+            if "代號" in col:
                 company_code_col = col
                 break
 
     if company_code_col is None:
-        print(f"⚠️ {report_name} 找不到公司代號欄位，跳過排序")
+        print(f"⚠️ {report_name} 找不到代號欄位，跳過排序")
         return df
 
     print(f"🔢 {report_name} 依 '{company_code_col}' 排序")
@@ -236,32 +265,54 @@ def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFram
     if "公司代號" in df_processed.columns:
         df_processed["公司代號"] = df_processed["公司代號"].astype(str)
 
-    # 股利資料表專屬處理
+    print(f"🔧 {report_name} 正在處理欄位標準化...")
+
+    # 1. 統一欄位重新命名 (所有報表)
+    rename_mapping = {}
+    if "公司代號" in df_processed.columns:
+        rename_mapping["公司代號"] = "代號"
+    if "公司名稱" in df_processed.columns:
+        rename_mapping["公司名稱"] = "名稱"
+    
+    if rename_mapping:
+        df_processed = df_processed.rename(columns=rename_mapping)
+        print(f"   欄位重新命名: {rename_mapping}")
+
+    # 2. 年度處理：保持民國年格式
+    if "年度" in df_processed.columns:
+        # 確保年度為整數格式，但保持民國年
+        year_numeric = pd.to_numeric(df_processed["年度"], errors='coerce')
+        df_processed["年度"] = year_numeric.astype('Int64')
+        print(f"   年度保持民國年格式")
+
+    # 3. 股利資料表專屬處理
     if report_name == "dividend":
 
-        # 1. 拆分公司代號名稱欄位
+        # 拆分公司代號名稱欄位
         if "公司代號名稱" in df_processed.columns:
-            print(f"🔧 {report_name} 正在拆分公司代號名稱欄位...")
+            print(f"   正在拆分公司代號名稱欄位...")
 
             # 拆分公司代號名稱 (格式: "1234 - 公司名稱")
             company_info = df_processed["公司代號名稱"].str.split(" - ", n=1, expand=True)
 
-            # 新增公司代號和公司名稱欄位
-            df_processed["公司代號"] = company_info[0].str.strip()
-            df_processed["公司名稱"] = company_info[1].str.strip()
+            # 新增代號和名稱欄位
+            df_processed["代號"] = company_info[0].str.strip()
+            df_processed["名稱"] = company_info[1].str.strip()
 
             # 移除原始的公司代號名稱欄位
             df_processed = df_processed.drop(columns=["公司代號名稱"])
 
-            print(f"✅ 成功拆分公司代號名稱欄位")
+            print(f"   成功拆分公司代號名稱欄位")
 
-        # 2. 拆分股利所屬年(季)度欄位
+        # 拆分股利所屬年(季)度欄位
         if "股利所屬年(季)度" in df_processed.columns:
-            print(f"🔧 {report_name} 正在拆分股利所屬年(季)度欄位...")
+            print(f"   正在拆分股利所屬年(季)度欄位...")
 
             # 提取年度 (例如: "113年 年度" → 113)
-            df_processed["年度"] = df_processed["股利所屬年(季)度"].str.extract(r'(\d+)年')[0]
-            df_processed["年度"] = pd.to_numeric(df_processed["年度"], errors='coerce').astype('Int64')
+            year_match = df_processed["股利所屬年(季)度"].str.extract(r'(\d+)年')[0]
+            year_numeric = pd.to_numeric(year_match, errors='coerce').astype('Int64')
+            # 保持民國年格式
+            df_processed["年度"] = year_numeric
 
             # 提取季別並標準化
             def standardize_dividend_period(period_str):
@@ -300,38 +351,14 @@ def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFram
             # 移除原始的股利所屬年(季)度欄位
             df_processed = df_processed.drop(columns=["股利所屬年(季)度"])
 
-            print(f"✅ 成功拆分股利所屬年(季)度欄位")
+            print(f"   成功拆分股利所屬年(季)度欄位")
 
-        # 重新排列欄位順序（僅限股利報表）
-        cols = df_processed.columns.tolist()
-
-        # 確定新欄位的順序：公司代號、公司名稱、年度、季別
-        priority_cols = []
-        if "公司代號" in cols:
-            priority_cols.append("公司代號")
-            cols.remove("公司代號")
-        if "公司名稱" in cols:
-            priority_cols.append("公司名稱")
-            cols.remove("公司名稱")
-        if "年度" in cols:
-            priority_cols.append("年度")
-            cols.remove("年度")
-        if "季別" in cols:
-            priority_cols.append("季別")
-            cols.remove("季別")
-
-        # 重新組合欄位順序
-        new_cols = priority_cols + cols
-        df_processed = df_processed[new_cols]
-
-        print(f"✅ {report_name} 欄位處理完成")
-
-    # 其他報表（balance_sheet、cash_flow、income_statement）處理
+    # 4. 其他報表（balance_sheet、cash_flow、income_statement）處理
     elif report_name in ["balance_sheet", "cash_flow", "income_statement"]:
 
         # 標準化季別格式：1, 2, 3, 4 → Q1, Q2, Q3, Q4
         if "季別" in df_processed.columns:
-            print(f"🔧 {report_name} 正在標準化季別格式...")
+            print(f"   正在標準化季別格式...")
 
             def standardize_quarter(quarter_val):
                 if pd.isna(quarter_val):
@@ -352,7 +379,22 @@ def process_company_code_name(df: pd.DataFrame, report_name: str) -> pd.DataFram
 
             df_processed["季別"] = df_processed["季別"].apply(standardize_quarter)
 
-            print(f"✅ {report_name} 季別標準化完成：1,2,3,4 → Q1,Q2,Q3,Q4")
+            print(f"   季別標準化完成：1,2,3,4 → Q1,Q2,Q3,Q4")
+
+    # 5. 重新排列欄位順序（所有報表統一）
+    cols = df_processed.columns.tolist()
+    priority_cols = []
+    
+    for col_name in ['代號', '名稱', '年度', '季別']:
+        if col_name in cols:
+            priority_cols.append(col_name)
+            cols.remove(col_name)
+
+    # 重新組合欄位順序
+    new_cols = priority_cols + cols
+    df_processed = df_processed[new_cols]
+
+    print(f"✅ {report_name} 欄位處理完成，統一格式：代號、名稱、年度(民國)、季別")
 
     return df_processed
 
@@ -485,6 +527,256 @@ def clean_and_sort_dividend(path: str) -> pd.DataFrame:
 
 
 # =========================
+# Helper: ETF Dividend Downloader
+# =========================
+def download_etf_dividend(year_str, year_dir):
+    """下載 ETF 股利資料 - 優先CSV格式"""
+    print(f"📈 下載 {year_str} ETF 股利資料...")
+    
+    # 民國年轉西元年
+    roc_year = int(year_str)
+    ad_year = roc_year + 1911
+    
+    # 設定日期範圍 (整年度)
+    start_date = f"{ad_year}0101"
+    end_date = f"{ad_year + 1}0101"  # 修正：下一年的1月1日
+    
+    # ETF 股利 API URL (使用您提供的格式)
+    csv_url = f"https://www.twse.com.tw/rwd/zh/ETF/etfDiv?stkNo=&startDate={start_date}&endDate={end_date}&response=csv"
+    json_url = f"https://www.twse.com.tw/rwd/zh/ETF/etfDiv?stkNo=&startDate={start_date}&endDate={end_date}&response=json"
+    
+    csv_filename = f"etf_dividend_{ad_year}.csv"
+    csv_path = os.path.join(year_dir, csv_filename)
+    
+    # 優先嘗試 CSV 下載
+    print(f"🔗 優先嘗試 CSV: {csv_url}")
+    
+    try:
+        response = requests.get(csv_url, headers=headers, verify=False, timeout=30)
+        response.encoding = "utf-8"
+        
+        if response.status_code == 200 and len(response.text.strip()) > 100:
+            # 儲存 CSV 內容到 raw_data
+            with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+                f.write(response.text)
+            
+            # 檢查是否為有效的CSV檔案
+            try:
+                test_df = pd.read_csv(csv_path, encoding="utf-8-sig", nrows=5)
+                if not test_df.empty and len(test_df.columns) > 3:
+                    print(f"✅ ETF 股利 CSV 下載成功: {csv_path}")
+                    return True
+                else:
+                    print(f"⚠️ CSV 檔案格式異常，嘗試 JSON 下載")
+                    os.remove(csv_path)
+            except Exception as e:
+                print(f"⚠️ CSV 檔案讀取失敗: {e}，嘗試 JSON 下載")
+                if os.path.exists(csv_path):
+                    os.remove(csv_path)
+        else:
+            print(f"⚠️ CSV 回應異常: status={response.status_code}, length={len(response.text)}")
+            
+    except Exception as e:
+        print(f"⚠️ CSV 下載失敗: {e}")
+    
+    # CSV 失敗，嘗試 JSON 下載並轉換為 CSV
+    print(f"🔄 嘗試 JSON 下載: {json_url}")
+    
+    try:
+        response = requests.get(json_url, headers=headers, verify=False, timeout=30)
+        response.encoding = "utf-8"
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # 檢查是否有資料
+            if 'data' in data and len(data['data']) > 0:
+                # 解析 JSON 資料並轉為 DataFrame
+                fields = data.get('fields', [])
+                rows = data.get('data', [])
+                
+                if fields and rows:
+                    df = pd.DataFrame(rows, columns=fields)
+                    
+                    # 儲存為 CSV 格式到 raw_data
+                    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+                    
+                    print(f"✅ ETF 股利 JSON→CSV 轉換成功: {len(df)} 筆資料")
+                    return True
+                else:
+                    print(f"⚠️ JSON 資料格式異常")
+            else:
+                print(f"⚠️ {year_str} 無 ETF 股利資料")
+                print(f"API 回應: {data}")
+        else:
+            print(f"❌ JSON API 請求失敗: {response.status_code}")
+            
+    except Exception as e:
+        print(f"❌ JSON 下載失敗: {e}")
+    
+    return False
+
+
+# =========================
+# Helper: clean ETF dividend CSV
+# =========================
+def clean_etf_dividend_csv(path: str) -> pd.DataFrame:
+    """清理 ETF 股利 CSV 檔案"""
+    print(f"🧹 清理 ETF 股利檔案: {os.path.basename(path)}")
+    
+    # 先讀取文本找到真正的表頭位置
+    with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
+        lines = f.readlines()
+    
+    header_idx = None
+    for i, line in enumerate(lines):
+        # 尋找包含 ETF 相關欄位的表頭行
+        if any(keyword in line for keyword in ['代號', '證券代號', 'ETF', '名稱', '證券簡稱', '除息交易日']):
+            if line.count(',') > 2:  # 確保是表格開頭
+                header_idx = i
+                break
+    
+    if header_idx is None:
+        print(f"⚠️ 無法在 {os.path.basename(path)} 找到有效的表頭")
+        # 嘗試直接讀取
+        try:
+            df = pd.read_csv(path, encoding="utf-8-sig", dtype=str)
+            if not df.empty:
+                return df
+        except:
+            pass
+        return pd.DataFrame()
+    
+    # 用 pandas 載入，跳過前面的說明行
+    try:
+        df = pd.read_csv(path, encoding="utf-8-sig", dtype=str, engine="python",
+                        on_bad_lines="skip", skiprows=header_idx)
+    except Exception as e:
+        print(f"⚠️ 無法讀取 {os.path.basename(path)}: {e}")
+        return pd.DataFrame()
+    
+    # 檢查是否有資料
+    if df.empty:
+        print(f"⚠️ {os.path.basename(path)} 為空檔案")
+        return pd.DataFrame()
+    
+    # 移除全空列和 Unnamed 欄位
+    df = df.dropna(how="all")
+    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+    
+    print(f"✅ {os.path.basename(path)} 清理完成，保留 {len(df)} 行")
+    
+    return df
+
+
+# =========================
+# Helper: process ETF dividend data (與dividend同步格式)
+# =========================
+def process_etf_dividend_data(df, year_str):
+    """處理 ETF 股利資料 - 與dividend格式同步"""
+    if df.empty:
+        return df
+    
+    df_processed = df.copy()
+    
+    print(f"🔧 ETF 股利資料處理中...")
+    
+    # 1. 欄位重新命名 (與dividend格式同步)
+    if '證券代號' in df_processed.columns:
+        df_processed = df_processed.rename(columns={'證券代號': '代號'})
+        print(f"   證券代號 → 代號")
+    
+    if '證券簡稱' in df_processed.columns:
+        df_processed = df_processed.rename(columns={'證券簡稱': '名稱'})
+        print(f"   證券簡稱 → 名稱")
+    
+    # 2. 年度處理：保持民國年格式
+    roc_year = int(year_str)
+    df_processed['年度'] = roc_year  # 直接使用民國年
+    print(f"   年度設為: {roc_year} (民國年)")
+    
+    # 3. 季別處理：依除息交易日判斷月份 (參考dividend格式)
+    if '除息交易日' in df_processed.columns:
+        print(f"   正在分析除息交易日以判斷月份...")
+        
+        def determine_month_from_date(date_str):
+            """從除息交易日判斷月份 (參考dividend格式)"""
+            if pd.isna(date_str) or date_str == '':
+                return None
+            
+            date_str = str(date_str).strip()
+            
+            # 嘗試提取月份
+            # 格式可能是: 114年01月22日, 2024/01/22, 01/22, 等
+            import re
+            
+            # 匹配各種日期格式中的月份
+            month_patterns = [
+                r'(\d+)年(\d+)月',  # 114年01月22日
+                r'(\d{4})[/-](\d{1,2})[/-]',  # 2024/01/22 或 2024-01-22
+                r'(\d{1,2})[/-](\d{1,2})',  # 01/22
+            ]
+            
+            month = None
+            for pattern in month_patterns:
+                match = re.search(pattern, date_str)
+                if match:
+                    if '年' in pattern:
+                        month = int(match.group(2))  # 月份是第二組
+                    else:
+                        month = int(match.group(2)) if len(match.groups()) > 1 else int(match.group(1))
+                    break
+            
+            if month is None:
+                return "OTHER"
+            
+            # 根據月份返回格式 (參考dividend的M{月份}格式)
+            if 1 <= month <= 12:
+                return f"M{month:02d}"  # M01, M02, ..., M12
+            else:
+                return "OTHER"
+        
+        df_processed['季別'] = df_processed['除息交易日'].apply(determine_month_from_date)
+        
+        # 統計月份分布
+        month_counts = df_processed['季別'].value_counts()
+        print(f"   月份分布: {dict(month_counts)}")
+    else:
+        df_processed['季別'] = "OTHER"
+        print(f"   無除息交易日欄位，季別設為 OTHER")
+    
+    # 4. 確保關鍵欄位格式正確
+    if '代號' in df_processed.columns:
+        df_processed['代號'] = df_processed['代號'].astype(str)
+    
+    if '名稱' in df_processed.columns:
+        df_processed['名稱'] = df_processed['名稱'].astype(str)
+    
+    # 5. 處理收益分配金額欄位
+    amount_col = '收益分配金額 (每1受益權益單位)'
+    if amount_col in df_processed.columns:
+        df_processed[amount_col] = df_processed[amount_col].replace('', None)
+    
+    # 6. 重新排列欄位順序 (與dividend同步)
+    cols = df_processed.columns.tolist()
+    priority_cols = []
+    
+    for col_name in ['代號', '名稱', '年度', '季別']:
+        if col_name in cols:
+            priority_cols.append(col_name)
+            cols.remove(col_name)
+    
+    # 重新組合欄位順序
+    new_cols = priority_cols + cols
+    df_processed = df_processed[new_cols]
+    
+    print(f"✅ ETF 股利資料處理完成: {len(df_processed)} 筆")
+    print(f"   最終欄位順序: {new_cols[:6]}...")  # 顯示前6個欄位
+    
+    return df_processed
+
+
+# =========================
 # Helper: log writer
 # =========================
 def write_log(year, report_name, csv_path, json_path, row_count):
@@ -535,48 +827,53 @@ for report_name, urls in report_types.items():
                 shutil.rmtree(year_dir)
             os.makedirs(year_dir, exist_ok=True)
 
-            all_filenames = []
+            # ETF 股利處理
+            if report_name == "etf_dividend":
+                download_etf_dividend(year_str, year_dir)
+            else:
+                # 一般報表處理
+                all_filenames = []
 
-            # Step 1: 抓 CSV 檔名
-            for market in markets:
-                for season in seasons:
-                    ajax_url = (
-                        urls["ajax"].format(year=year_str, market=market, season=season)
-                        if report_name != "dividend"
-                        else urls["ajax"].format(year=year_str, market=market)
-                    )
-                    try:
-                        res = requests.get(ajax_url, headers=headers, verify=False, timeout=10)
-                        res.encoding = "utf-8"
-                        soup = BeautifulSoup(res.text, "lxml")
-                        input_tags = soup.find_all("input", {"name": "filename"})
-                        filenames = [tag.get("value") for tag in input_tags if tag.get("value")]
-                        all_filenames.extend(filenames)
-                    except Exception as e:
-                        print(f"Fetch {year_str} {market} {season} filenames failed: {e}")
-                    time.sleep(0.5)
+                # Step 1: 抓 CSV 檔名
+                for market in markets:
+                    for season in seasons:
+                        ajax_url = (
+                            urls["ajax"].format(year=year_str, market=market, season=season)
+                            if report_name != "dividend"
+                            else urls["ajax"].format(year=year_str, market=market)
+                        )
+                        try:
+                            res = requests.get(ajax_url, headers=headers, verify=False, timeout=10)
+                            res.encoding = "utf-8"
+                            soup = BeautifulSoup(res.text, "lxml")
+                            input_tags = soup.find_all("input", {"name": "filename"})
+                            filenames = [tag.get("value") for tag in input_tags if tag.get("value")]
+                            all_filenames.extend(filenames)
+                        except Exception as e:
+                            print(f"Fetch {year_str} {market} {season} filenames failed: {e}")
+                        time.sleep(0.5)
 
-            # 去重
-            seen = set()
-            unique_filenames = [f for f in all_filenames if not (f in seen or seen.add(f))]
-            print(f"{year_str} found {len(all_filenames)} CSVs, {len(unique_filenames)} unique")
+                # 去重
+                seen = set()
+                unique_filenames = [f for f in all_filenames if not (f in seen or seen.add(f))]
+                print(f"{year_str} found {len(all_filenames)} CSVs, {len(unique_filenames)} unique")
 
-            # Step 2: 下載
-            for fname in tqdm(unique_filenames, desc=f"{year_str} {report_name} download"):
-                save_path = os.path.join(year_dir, fname)
-                download_url = f"{urls['download_base']}?firstin=true&step=10&filename={fname}"
-                for attempt in range(3):
-                    try:
-                        r = requests.get(download_url, headers=headers, verify=False, timeout=10)
-                        r.encoding = "big5"
-                        with open(save_path, "w", encoding="utf-8-sig", newline="") as f:
-                            f.write(r.text)
-                        break
-                    except Exception as e:
-                        print(f"Download {fname} failed: {e} (try {attempt+1})")
-                        time.sleep(2)
-                else:
-                    print(f"❌ {fname} download failed, skipped")
+                # Step 2: 下載
+                for fname in tqdm(unique_filenames, desc=f"{year_str} {report_name} download"):
+                    save_path = os.path.join(year_dir, fname)
+                    download_url = f"{urls['download_base']}?firstin=true&step=10&filename={fname}"
+                    for attempt in range(3):
+                        try:
+                            r = requests.get(download_url, headers=headers, verify=False, timeout=10)
+                            r.encoding = "big5"
+                            with open(save_path, "w", encoding="utf-8-sig", newline="") as f:
+                                f.write(r.text)
+                            break
+                        except Exception as e:
+                            print(f"Download {fname} failed: {e} (try {attempt+1})")
+                            time.sleep(2)
+                    else:
+                        print(f"❌ {fname} download failed, skipped")
 
         # Step 3: 清理與合併 (下載模式和僅合併模式都會執行)
         all_dfs = []
@@ -588,12 +885,18 @@ for report_name, urls in report_types.items():
             try:
                 if report_name == "dividend":
                     df = clean_and_sort_dividend(path)
+                elif report_name == "etf_dividend":
+                    # 使用專門的 ETF 股利清理函數
+                    df = clean_etf_dividend_csv(path)
+                    if not df.empty:
+                        df = process_etf_dividend_data(df, year_str)
                 else:
                     df = pd.read_csv(path, encoding="utf-8-sig", dtype=str)
                     df = df.dropna(how="all")
 
                 # 先不過濾欄位，保留所有資料進行合併
-                all_dfs.append(df)
+                if not df.empty:
+                    all_dfs.append(df)
             except Exception as e:
                 print(f"Read {fname} failed: {e}")
 
@@ -603,24 +906,29 @@ for report_name, urls in report_types.items():
             combined_df = pd.concat(all_dfs, ignore_index=True)
             print(f"📊 合併完成，總計 {len(combined_df)} 行，{len(combined_df.columns)} 欄")
 
-            # 合併後再過濾欄位
+            # 先整理欄位：統一欄位名稱和格式
+            combined_df = process_company_code_name(combined_df, report_name)
+            
+            # 然後過濾欄位 (使用統一後的欄位名稱)
             combined_df = filter_columns(combined_df, report_name)
 
-            # 整理欄位：將股利資料表的"公司代號名稱"分成"公司代號"和"公司名稱"兩欄
-            combined_df = process_company_code_name(combined_df, report_name)
-
-            # 依公司代號排序
-            combined_df = sort_by_company_code(combined_df, report_name)
+            # 依代號排序 (ETF 與 dividend 格式統一)
+            if report_name == "etf_dividend":
+                if '代號' in combined_df.columns:
+                    combined_df = combined_df.sort_values(by='代號', ascending=True, ignore_index=True)
+                    print(f"🔢 {report_name} 依 '代號' 排序")
+            else:
+                combined_df = sort_by_company_code(combined_df, report_name)
 
             csv_path = json_path = None
 
             if "csv" in save_format:
-                csv_path = os.path.join(merge_dir, f"{year_str}-{report_name}.csv")
+                csv_path = os.path.join(csv_output_dir, f"{year_str}-{report_name}.csv")
                 combined_df.to_csv(csv_path, index=False, encoding="utf-8-sig")
                 print(f"✅ CSV saved: {csv_path}")
 
             if "json" in save_format:
-                json_path = os.path.join(merge_dir, f"{year_str}-{report_name}.json")
+                json_path = os.path.join(json_output_dir, f"{year_str}-{report_name}.json")
                 combined_df.to_json(json_path, orient="records", force_ascii=False, indent=2)
                 print(f"✅ JSON saved: {json_path}")
 
@@ -628,3 +936,5 @@ for report_name, urls in report_types.items():
             print(f"📝 Log updated for {year_str} {report_name} - Total rows: {len(combined_df)}")
         else:
             print(f"❌ {year_str} {report_name} no valid CSVs to merge")
+
+print("\n🎉 所有處理完成！")
