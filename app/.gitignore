@@ -1,0 +1,22 @@
+# Python 快取檔案
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虛擬環境
+venv/
+env/
+
+# macOS 系統檔案
+.DS_Store
+
+# 編輯器設定
+.vscode/
+.idea/
+
+# 原始資料檔案（可重新下載）
+raw_data/
+
+# 暫存檔案
+*.tmp
+*.log
