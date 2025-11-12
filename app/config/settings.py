@@ -7,7 +7,7 @@ import os
 # =========================
 # 基本處理參數
 # =========================
-START_YEAR: int = 107
+START_YEAR: int = 114
 END_YEAR: int = 114
 MARKETS: List[str] = ["sii", "otc"]
 SEASONS: List[str] = ["01", "02", "03", "04"]
@@ -15,7 +15,7 @@ SEASONS: List[str] = ["01", "02", "03", "04"]
 # =========================
 # 處理選項
 # =========================
-ONLY_MERGE: bool = True  # 設為 True 時只做合併，不下載
+ONLY_MERGE: bool = False  # 設為 True 時只做合併，不下載
 DOWNLOAD_REPORTS: List[str] = ['all']  # 處理所有報表類型
 SAVE_FORMAT: List[str] = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
 
