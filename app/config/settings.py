@@ -40,10 +40,19 @@ RETRY_ATTEMPTS: int = 3
 RETRY_DELAY: float = 2.0
 
 # =========================
+# 股價相關設定
+# =========================
+# 股價過濾條件
+STOCK_MIN_PRICE: float = 10.0  # 最小股價門檻
+
+# 原始資料保留天數
+RAW_DATA_RETENTION_DAYS: int = 7  # 保留7天的原始資料
+
+# =========================
 # 自動建立必要目錄
 # =========================
 def ensure_directories() -> None:
     """確保所有必要的目錄存在"""
-    directories = [MERGE_DIR, CSV_OUTPUT_DIR, JSON_OUTPUT_DIR]
+    directories = [MERGE_DIR, CSV_OUTPUT_DIR, JSON_OUTPUT_DIR, BASE_DIR]
     for directory in directories:
         os.makedirs(directory, exist_ok=True)

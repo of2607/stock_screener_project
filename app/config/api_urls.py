@@ -101,3 +101,36 @@ def get_etf_urls(start_date: str, end_date: str) -> Dict[str, str]:
         "csv": config["csv_export"].format(start_date=start_date, end_date=end_date),
         "json": config["url"].format(start_date=start_date, end_date=end_date)
     }
+
+# =========================
+# 股價資料 API 設定
+# =========================
+STOCK_PRICE_APIS = {
+    "twse": {
+        "url": "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL",
+        "market": "TSE",
+        "description": "上市股票日平均價格"
+    },
+    "tpex": {
+        "url": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes",
+        "market": "OTC",
+        "description": "上櫃股票即時報價"
+    }
+}
+
+def get_stock_price_urls():
+    """
+    取得股價 API 網址清單
+    
+    Returns:
+        包含所有股價 API 資訊的字典
+    """
+    return STOCK_PRICE_APIS
+
+def get_twse_stock_url():
+    """取得上市股票 API 網址"""
+    return STOCK_PRICE_APIS["twse"]["url"]
+
+def get_tpex_stock_url():
+    """取得上櫃股票 API 網址"""
+    return STOCK_PRICE_APIS["tpex"]["url"]
