@@ -7,7 +7,7 @@ import os
 # =========================
 # 基本處理參數
 # =========================
-START_YEAR: int = 107
+START_YEAR: int = 114
 END_YEAR: int = 114
 MARKETS: List[str] = ["sii", "otc"]
 SEASONS: List[str] = ["01", "02", "03", "04"]
@@ -18,8 +18,8 @@ SEASONS: List[str] = ["01", "02", "03", "04"]
 DOWNLOAD_REPORTS: List[str] = ['all']  # 處理所有報表類型
 SAVE_FORMAT: List[str] = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
 ENABLE_DOWNLOAD_REPORTS: bool = False # 是否下載報表資料
-ENABLE_MERGE_REPORTS: bool = False # 是否合併報表資料
-ENABLE_SUMMARY_REPORT: bool = True # 是否自動產生彙總報表
+ENABLE_MERGE_REPORTS: bool = True # 是否合併報表資料
+ENABLE_SUMMARY_REPORT: bool = False # 是否自動產生彙總報表
 
 # =========================
 # 目錄設定
@@ -40,6 +40,7 @@ REPORT_JSON_DIR: str = os.path.join(REPORT_DATA_DIR, "json/summary_report.json")
 SUMMARY_FROM_DIR: str = MERGED_CSV_DIR
 SUMMARY_PRICE_FILE: str = os.path.join(MERGED_CSV_DIR, "latest_stock_prices.csv")
 SUMMARY_LOG_DIR: str = os.path.join(LOG_DIR_BASE, "summary_report_log.json")
+SUMMARY_YEARS = 5  # 預設彙總報表的年份數
 
 # =========================
 # HTTP 設定

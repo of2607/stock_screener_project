@@ -10,20 +10,21 @@ import sys
 import json
 from typing import Dict, Any
 
-# 加入當前路徑以確保模組可以正確匯入
+# 修正 sys.path，確保可從 processors 目錄直接執行時正確匯入 app 下模組
 current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+app_dir = os.path.abspath(os.path.join(current_dir, ".."))
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
 
 try:
     # 匯入設定
     from config.settings import MERGED_CSV_DIR, MERGED_JSON_DIR, LOG_DIR_BASE, ensure_directories
-    
+
     # 匯入功能模組
     from utils.logger import Logger
     from downloaders.stock_price_downloader import StockPriceDownloader
     from processors.stock_price_processor import StockPriceProcessor
-    
+
 except ImportError as e:
     print(f"❌ 匯入模組失敗: {e}")
     print("請確認所有必要的模組檔案都存在且路徑正確")
@@ -50,9 +51,9 @@ class StockPriceFetcher:
         self.json_output_path = os.path.join(MERGED_JSON_DIR, "latest_stock_prices.json")
         self.csv_output_path = os.path.join(MERGED_CSV_DIR, "latest_stock_prices.csv")
     
-    def fetch_and_save(self) -> bool:
+    async def fetch_and_save(self) -> bool:
         """
-        抓取股價資料並儲存
+        抓取股價資料並儲存 (async/await)
         
         Returns:
             是否成功完成
@@ -61,21 +62,41 @@ class StockPriceFetcher:
         
         try:
             # 1. 下載股價資料
-            success, raw_data_dict = self.downloader.download_data()
+            if hasattr(self.downloader, "download_data") and callable(self.downloader.download_data):
+                if hasattr(self.downloader.download_data, "__await__"):
+                    success, raw_data_dict = await self.downloader.download_data()
+                else:
+                    success, raw_data_dict = self.downloader.download_data()
+            else:
+                self.logger.error("找不到下載器")
+                return False
             
             if not success or not raw_data_dict:
                 self.logger.error("股價資料下載失敗")
                 return False
             
             # 2. 處理資料
-            processed_df = self.processor.process_stock_data(raw_data_dict)
+            if hasattr(self.processor, "process_stock_data") and callable(self.processor.process_stock_data):
+                if hasattr(self.processor.process_stock_data, "__await__"):
+                    processed_df = await self.processor.process_stock_data(raw_data_dict)
+                else:
+                    processed_df = self.processor.process_stock_data(raw_data_dict)
+            else:
+                self.logger.error("找不到資料處理器")
+                return False
             
             if processed_df.empty:
                 self.logger.error("股價資料處理後為空")
                 return False
             
             # 3. 格式化輸出資料
-            output_df = self.processor.format_for_output(processed_df)
+            if hasattr(self.processor, "format_for_output") and callable(self.processor.format_for_output):
+                if hasattr(self.processor.format_for_output, "__await__"):
+                    output_df = await self.processor.format_for_output(processed_df)
+                else:
+                    output_df = self.processor.format_for_output(processed_df)
+            else:
+                output_df = processed_df
             
             # 4. 儲存檔案
             json_success = self._save_json(output_df)
@@ -158,14 +179,14 @@ class StockPriceFetcher:
         )
 
 
-def main() -> None:
-    """主程式入口"""
+async def main() -> None:
+    """主程式入口 (async/await)"""
     try:
         print("🏢 TWSE 股價資料抓取工具")
         print("=" * 40)
         
         fetcher = StockPriceFetcher()
-        success = fetcher.fetch_and_save()
+        success = await fetcher.fetch_and_save()
         
         if success:
             print("\n✅ 股價資料抓取成功！")
@@ -183,4 +204,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
