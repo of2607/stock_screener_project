@@ -131,7 +131,27 @@ class DataStandardizer:
         # 拆分股利所屬年(季)度欄位
         if "股利所屬年(季)度" in df.columns:
             df = self._process_dividend_period(df)
-        
+
+        # === [MODIFY] 新增現金股利欄位 ===
+        cash_dividend_cols = [
+            "股東配發-盈餘分配之現金股利(元/股)",
+            "股東配發-法定盈餘公積發放之現金(元/股)",
+            "股東配發-資本公積發放之現金(元/股)"
+        ]
+        def safe_float(val):
+            try:
+                if pd.isna(val):
+                    return 0.0
+                return float(val)
+            except Exception:
+                return 0.0
+
+        df["現金股利"] = df.apply(
+            lambda row: sum(safe_float(row.get(col, 0)) for col in cash_dividend_cols),
+            axis=1
+        )
+        # === [MODIFY END] ===
+
         return df
     
     def _process_dividend_period(self, df: pd.DataFrame) -> pd.DataFrame:
