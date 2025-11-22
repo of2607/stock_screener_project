@@ -217,9 +217,9 @@ DOWNLOAD_REPORTS = [
 SAVE_FORMAT = ["csv", "json"]  # 可選: "csv", "json" 或兩者
 
 # 路徑設定
-BASE_DIR = "datas/raw_data"
-CSV_OUTPUT_DIR = "datas/merged_data/csv"
-JSON_OUTPUT_DIR = "datas/merged_data/json"
+RAW_DATA_DIR = "datas/raw_data"
+MERGED_CSV_DIR = "datas/merged_data/csv"
+MERGED_JSON_DIR = "datas/merged_data/json"
 ```
 
 ### 🆕 股價相關設定

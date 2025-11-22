@@ -17,7 +17,7 @@ if current_dir not in sys.path:
 
 try:
     # 匯入設定
-    from config.settings import CSV_OUTPUT_DIR, JSON_OUTPUT_DIR, MERGE_DIR, ensure_directories
+    from config.settings import MERGED_CSV_DIR, MERGED_JSON_DIR, LOG_DIR_BASE, ensure_directories
     
     # 匯入功能模組
     from utils.logger import Logger
@@ -39,7 +39,7 @@ class StockPriceFetcher:
         ensure_directories()
         
         # 設定日誌 (放在 merged_data 根目錄)
-        log_path = os.path.join(MERGE_DIR, "stock_price_log.json")
+        log_path = os.path.join(LOG_DIR_BASE, "stock_price_log.json")
         self.logger = Logger(log_path)
         
         # 初始化下載器和處理器
@@ -47,8 +47,8 @@ class StockPriceFetcher:
         self.processor = StockPriceProcessor(self.logger)
         
         # 輸出檔案路徑
-        self.json_output_path = os.path.join(JSON_OUTPUT_DIR, "latest_stock_prices.json")
-        self.csv_output_path = os.path.join(CSV_OUTPUT_DIR, "latest_stock_prices.csv")
+        self.json_output_path = os.path.join(MERGED_JSON_DIR, "latest_stock_prices.json")
+        self.csv_output_path = os.path.join(MERGED_CSV_DIR, "latest_stock_prices.csv")
     
     def fetch_and_save(self) -> bool:
         """

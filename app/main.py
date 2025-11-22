@@ -18,7 +18,7 @@ try:
     # 匯入設定
     from config.settings import (
         START_YEAR, END_YEAR, ENABLE_DOWNLOAD_REPORTS, ENABLE_MERGE_REPORTS, DOWNLOAD_REPORTS, SAVE_FORMAT,
-        BASE_DIR, CSV_OUTPUT_DIR, JSON_OUTPUT_DIR, LOG_PATH, ensure_directories
+        RAW_DATA_DIR, MERGED_CSV_DIR, MERGED_JSON_DIR, MERGED_LOG_DIR, ensure_directories
     )
 
     # 匯入處理器
@@ -38,7 +38,7 @@ class TWSEDataProcessor:
     
     def __init__(self):
         """初始化處理器"""
-        self.logger = Logger(LOG_PATH)
+        self.logger = Logger(MERGED_LOG_DIR)
         self.report_processor = ReportProcessor(self.logger)
         self.twse_downloader = TWSEDownloader(self.logger)
         self.etf_downloader = ETFDownloader(self.logger)
@@ -75,7 +75,7 @@ class TWSEDataProcessor:
         
         for year in range(START_YEAR, END_YEAR + 1):
             year_str = str(year)
-            year_dir = os.path.join(BASE_DIR, report_name, year_str)
+            year_dir = os.path.join(RAW_DATA_DIR, report_name, year_str)
             
             # 1. 確保資料可用（下載或檢查現有資料）
             if not self._ensure_data_available(report_name, year_str, year_dir):
@@ -125,13 +125,13 @@ class TWSEDataProcessor:
         
         # 儲存 CSV
         if "csv" in SAVE_FORMAT:
-            csv_path = os.path.join(CSV_OUTPUT_DIR, f"{year_str}-{report_name}.csv")
+            csv_path = os.path.join(MERGED_CSV_DIR, f"{year_str}-{report_name}.csv")
             df.to_csv(csv_path, index=False, encoding="utf-8-sig")
             self.logger.success(f"CSV 已儲存: {csv_path}")
         
         # 儲存 JSON
         if "json" in SAVE_FORMAT:
-            json_path = os.path.join(JSON_OUTPUT_DIR, f"{year_str}-{report_name}.json")
+            json_path = os.path.join(MERGED_JSON_DIR, f"{year_str}-{report_name}.json")
             df.to_json(json_path, orient="records", force_ascii=False, indent=2)
             self.logger.success(f"JSON 已儲存: {json_path}")
         

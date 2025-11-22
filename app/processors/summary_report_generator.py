@@ -12,15 +12,16 @@ from processors.data_sorter import DataSorter
 from processors.report_processor import ReportProcessor
 from utils.logger import Logger
 from config.settings import (
-    SUMMARY_DATA_DIR,
+    SUMMARY_FROM_DIR,
     SUMMARY_PRICE_FILE,
-    SUMMARY_REPORT_CSV,
-    SUMMARY_REPORT_JSON,
+    SUMMARY_LOG_DIR,
+    REPORT_CSV_DIR,
+    REPORT_JSON_DIR,
 )
 
-DEFAULT_REPORT_CSV = SUMMARY_REPORT_CSV
-DEFAULT_REPORT_JSON = SUMMARY_REPORT_JSON
-DEFAULT_DATA_DIR = SUMMARY_DATA_DIR
+DEFAULT_REPORT_CSV = REPORT_CSV_DIR
+DEFAULT_REPORT_JSON = REPORT_JSON_DIR
+DEFAULT_DATA_DIR = SUMMARY_FROM_DIR
 DEFAULT_PRICE_FILE = SUMMARY_PRICE_FILE
 DEFAULT_QUARTERS = ["Q1", "Q2", "Q3", "Q4"]
 DEFAULT_SUMMARY_YEARS = 5
@@ -307,7 +308,7 @@ class SummaryReportGenerator:
 
 
 def main():
-    logger = Logger("datas/report/summary_report.log")
+    logger = Logger(SUMMARY_LOG_DIR)
     csv_cleaner = CSVCleaner(logger)
     data_standardizer = DataStandardizer(logger)
     data_sorter = DataSorter(logger)

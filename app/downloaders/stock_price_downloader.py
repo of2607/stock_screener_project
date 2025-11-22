@@ -9,7 +9,7 @@ import re
 
 from .base_downloader import BaseDownloader
 from config.api_urls import get_twse_stock_url, get_tpex_stock_url
-from config.settings import BASE_DIR, RAW_DATA_RETENTION_DAYS
+from config.settings import RAW_DATA_DIR, RAW_DATA_RETENTION_DAYS
 
 
 class StockPriceDownloader(BaseDownloader):
@@ -56,7 +56,7 @@ class StockPriceDownloader(BaseDownloader):
         """儲存原始資料到 raw_data 目錄"""
         try:
             # 建立股價原始資料目錄
-            stock_raw_dir = os.path.join(BASE_DIR, "stock_prices")
+            stock_raw_dir = os.path.join(RAW_DATA_DIR, "stock_prices")
             os.makedirs(stock_raw_dir, exist_ok=True)
             
             # 使用當前日期作為檔名
@@ -82,7 +82,7 @@ class StockPriceDownloader(BaseDownloader):
     def _cleanup_old_raw_data(self) -> None:
         """清理過期的原始資料檔案"""
         try:
-            stock_raw_dir = os.path.join(BASE_DIR, "stock_prices")
+            stock_raw_dir = os.path.join(RAW_DATA_DIR, "stock_prices")
             if not os.path.exists(stock_raw_dir):
                 return
             
