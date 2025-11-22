@@ -40,7 +40,7 @@ class DataStandardizer:
             **{f"第{i}季": f"Q{i}" for i in range(1, 5)}
         }
     
-    def standardize_data(self, df: pd.DataFrame, report_type: str) -> pd.DataFrame:
+    def standardize_data(self, df: pd.DataFrame, report_type: str, skip_rename: bool = False) -> pd.DataFrame:
         """
         標準化資料格式 - 增強錯誤處理
         
@@ -56,28 +56,25 @@ class DataStandardizer:
         
         try:
             self.logger.debug(f"{report_type} 正在處理欄位標準化...")
-            
             df_processed = df.copy()
-            
-            # 使用鏈式處理，每步都可能拋出異常
-            processing_steps = [
-                ("重新命名欄位", lambda x: self._rename_columns(x, report_type)),
+            # 處理步驟可選擇是否跳過欄位名稱統一
+            processing_steps = []
+            if not skip_rename:
+                processing_steps.append(("重新命名欄位", lambda x: self._rename_columns(x, report_type)))
+            processing_steps += [
                 ("標準化年度格式", self._standardize_year_format),
                 ("特殊資料處理", lambda x: self._process_by_report_type(x, report_type)),
                 ("重新排列欄位", self._reorder_columns),
                 ("轉換數值欄位", lambda x: self._convert_numeric_columns(x, report_type))
             ]
-            
             for step_name, step_func in processing_steps:
                 try:
                     df_processed = step_func(df_processed)
                 except Exception as e:
                     self.logger.error(f"{report_type} {step_name}失敗: {str(e)}")
                     raise
-            
             self.logger.success(f"{report_type} 欄位處理完成，統一格式：代號、名稱、年度(民國)、季別")
             return df_processed
-            
         except Exception as e:
             self.logger.error(f"{report_type} 資料標準化失敗: {str(e)}")
             return df  # 返回原始資料而非空資料框
@@ -95,15 +92,22 @@ class DataStandardizer:
         return processor(df) if processor else df
     
     def _rename_columns(self, df: pd.DataFrame, report_type: str) -> pd.DataFrame:
-        """重新命名欄位"""
+        """重新命名欄位，並統一『淨利（損）歸屬於母公司業主』相關欄位名稱"""
+        from config.column_configs import get_semantic_unify_columns
         rename_mapping = get_rename_mapping(report_type)
-        
+        # 1. 依 config 統一所有語意相同欄位（支援所有報表型態）
+        semantic_unify = get_semantic_unify_columns(report_type)
+        for std_col, variants in semantic_unify.items():
+            for col in variants:
+                if col in df.columns and col != std_col:
+                    df = df.rename(columns={col: std_col})
+                    self.logger.debug(f"   欄位重新命名: {col} → {std_col}")
+        # 2. 其餘欄位依照 config 設定進行命名
         if rename_mapping:
             existing_mapping = {k: v for k, v in rename_mapping.items() if k in df.columns}
             if existing_mapping:
                 df = df.rename(columns=existing_mapping)
                 self.logger.debug(f"   欄位重新命名: {existing_mapping}")
-        
         return df
     
     def _standardize_year_format(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -270,27 +274,30 @@ class DataStandardizer:
         """轉換數值欄位"""
         numeric_cols = get_numeric_columns(report_type)
         existing_numeric_cols = [col for col in numeric_cols if col in df.columns]
-        
+
         if existing_numeric_cols:
             self.logger.debug(f"   轉換數值欄位: {existing_numeric_cols}")
-            
             for col in existing_numeric_cols:
+                # 若欄位重複，pandas 會回傳 DataFrame，否則為 Series
+                col_data = df[col]
+                if isinstance(col_data, pd.DataFrame):
+                    # 欄位重複，合併為一欄（取第一欄非空值）
+                    self.logger.warning(f"   欄位 {col} 有重複，將自動合併僅保留第一欄非空值")
+                    df[col] = col_data.bfill(axis=1).iloc[:, 0]
                 df[col] = self._clean_and_convert_numeric(df[col])
-            
             self.logger.success(f"   成功轉換 {len(existing_numeric_cols)} 個數值欄位")
-        
         return df
     
     def _clean_and_convert_numeric(self, series: pd.Series) -> pd.Series:
-        """清理並轉換數值 - 優化版本"""
-        # 使用單一正則表達式替換多個字符，提升效能
+        """清理並轉換數值 - 強化版本，去除雜訊並正確轉型"""
         cleaned = (
             series.astype(str)
-            .str.replace(r'[,\s\-]+', '', regex=True)
+            .str.replace(r'[\s,，]', '', regex=True)  # 去除空白、逗號
+            .str.replace(r'[()]', '', regex=True)      # 去除括號
+            .str.replace(r'－', '-', regex=False)      # 全形負號轉半形
+            .str.replace(r'．', '.', regex=False)      # 全形小數點轉半形
             .replace(['', 'nan', 'None', 'null'], None)
         )
-        
-        # 轉換為數值
         return pd.to_numeric(cleaned, errors='coerce')
     
     def _process_etf_dividend_data(self, df: pd.DataFrame, year_str: str) -> pd.DataFrame:
@@ -343,4 +350,4 @@ class DataStandardizer:
         
         self.logger.success(f"ETF 股利資料處理完成: {len(df_processed)} 筆")
         return df_processed
-    
+

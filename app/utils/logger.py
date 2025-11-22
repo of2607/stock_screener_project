@@ -22,7 +22,9 @@ class Logger:
     
     def ensure_log_directory(self) -> None:
         """確保日誌目錄存在"""
-        os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+        dir_path = os.path.dirname(self.log_path)
+        if dir_path and dir_path.strip():
+            os.makedirs(dir_path, exist_ok=True)
     
     def info(self, message: str) -> None:
         """記錄資訊訊息"""

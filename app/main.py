@@ -17,7 +17,7 @@ if current_dir not in sys.path:
 try:
     # 匯入設定
     from config.settings import (
-        START_YEAR, END_YEAR, ONLY_MERGE, DOWNLOAD_REPORTS, SAVE_FORMAT,
+        START_YEAR, END_YEAR, ENABLE_DOWNLOAD_REPORTS, ENABLE_MERGE_REPORTS, DOWNLOAD_REPORTS, SAVE_FORMAT,
         BASE_DIR, CSV_OUTPUT_DIR, JSON_OUTPUT_DIR, LOG_PATH, ensure_directories
     )
 
@@ -92,13 +92,14 @@ class TWSEDataProcessor:
     
     def _ensure_data_available(self, report_name: str, year_str: str, year_dir: str) -> bool:
         """確保資料可用（下載或檢查現有資料）"""
+        ONLY_MERGE = ENABLE_MERGE_REPORTS and not ENABLE_DOWNLOAD_REPORTS
         if ONLY_MERGE:
             self.logger.progress(f"僅合併模式: 處理 {year_str} {report_name}")
             if not os.path.exists(year_dir):
                 self.logger.error(f"找不到資料夾: {year_dir}")
                 return False
             return True
-        else:
+        elif ENABLE_DOWNLOAD_REPORTS:
             self.logger.progress(f"下載模式: 處理 {year_str} {report_name}")
             return self._download_data(report_name, year_str, year_dir)
     
@@ -138,6 +139,7 @@ class TWSEDataProcessor:
         self.logger.write_processing_log(year_str, report_name, csv_path, json_path, len(df))
 
 
+
 def main() -> None:
     """主程式入口"""
     try:
@@ -150,5 +152,45 @@ def main() -> None:
         raise
 
 
+
+# 可擴充的主流程與後置報表產生任務（統一管理）
+POST_REPORT_TASKS = [
+    {
+        "enable_flag": None,  # 主流程永遠執行
+        "desc": "主資料處理流程",
+        "module": None,  # 直接呼叫 main()
+        "entry": None
+    },
+    {
+        "enable_flag": "ENABLE_SUMMARY_REPORT",
+        "desc": "自動產生彙總報表",
+        "module": "processors.summary_report_generator",
+        "entry": "main"
+    },
+    # 未來可在此擴充更多報表產生任務
+]
+
+def run_all_tasks():
+    """依任務清單執行所有主流程與後置報表產生任務，可彈性擴充"""
+    from importlib import import_module
+    from config import settings
+    for i, task in enumerate(POST_REPORT_TASKS):
+        if i == 0:
+            # 第一個任務為主流程，直接呼叫 main()
+            print(f"\n🚦 {task['desc']}...")
+            try:
+                main()
+            except Exception as e:
+                print(f"⚠️ {task['desc']}失敗: {e}")
+        else:
+            enabled = getattr(settings, task["enable_flag"], False)
+            if enabled:
+                print(f"\n🚦 {task['desc']}...")
+                try:
+                    mod = import_module(task["module"])
+                    getattr(mod, task["entry"])()
+                except Exception as e:
+                    print(f"⚠️ {task['desc']}失敗: {e}")
+
 if __name__ == "__main__":
-    main()
+    run_all_tasks()

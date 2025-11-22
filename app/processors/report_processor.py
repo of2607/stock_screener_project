@@ -87,7 +87,7 @@ class ReportProcessor:
     ) -> pd.DataFrame:
         """清理單一 CSV 檔案"""
         if report_name == "dividend":
-            return self.csv_cleaner.clean_dividend_csv(file_path)
+            df = self.csv_cleaner.clean_dividend_csv(file_path)
         elif report_name == "etf_dividend":
             df = self.csv_cleaner.clean_etf_dividend_csv(file_path)
             if not df.empty:
@@ -95,7 +95,11 @@ class ReportProcessor:
                 df = self.data_standardizer._process_etf_dividend_data(df, year_str)
             return df
         else:
-            return self.csv_cleaner.clean_standard_csv(file_path)
+            df = self.csv_cleaner.clean_standard_csv(file_path)
+        # 合併前先標準化欄位名稱（語意統一）
+        if not df.empty:
+            df = self.data_standardizer._rename_columns(df, report_name)
+        return df
     
     def _merge_and_process_data(
         self, 
@@ -104,17 +108,19 @@ class ReportProcessor:
         year_str: str
     ) -> pd.DataFrame:
         """合併並處理資料"""
-        # 1. 合併所有資料框
+        # 1. 合併所有資料框（欄位名稱已標準化）
         combined_df = pd.concat(dataframes, ignore_index=True)
         self.logger.info(f"📊 合併完成，總計 {len(combined_df)} 行，{len(combined_df.columns)} 欄")
-        
-        # 2. 先整理欄位：統一欄位名稱和格式 (僅對非 ETF 股利資料)
+
+        # 2. 合併後僅做型別轉換、年度格式、排序等（不再做欄位語意統一）
         if report_name != "etf_dividend":
-            combined_df = self.data_standardizer.standardize_data(combined_df, report_name)
-        
+            combined_df = self.data_standardizer.standardize_data(
+                combined_df, report_name, skip_rename=True
+            )
+
         # 3. 然後過濾欄位 (使用統一後的欄位名稱)
         combined_df = self.column_filter.filter_columns(combined_df, report_name)
-        
+
         # 4. 依代號排序 (ETF 與 dividend 格式統一)
         if report_name == "etf_dividend":
             if '代號' in combined_df.columns:

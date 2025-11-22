@@ -131,3 +131,22 @@ class DataSorter:
             ascending=ascending,
             ignore_index=True
         )
+
+    def sort_dividend_report(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        股利資料專用排序：自動判斷欄位，依公司代號/名稱/股東會日期排序
+        Args:
+            df: 要排序的資料框
+        Returns:
+            排序後的資料框
+        """
+        if df.empty:
+            return df
+        sort_cols = []
+        if "公司代號" in df.columns:
+            sort_cols = [col for col in ["公司代號", "公司名稱", "股東會日期"] if col in df.columns]
+        elif "公司代號名稱" in df.columns:
+            sort_cols = [col for col in ["公司代號名稱", "股東會日期"] if col in df.columns]
+        if sort_cols:
+            return df.sort_values(by=sort_cols, ascending=True, ignore_index=True)
+        return df

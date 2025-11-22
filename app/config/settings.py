@@ -7,7 +7,7 @@ import os
 # =========================
 # 基本處理參數
 # =========================
-START_YEAR: int = 107
+START_YEAR: int = 114
 END_YEAR: int = 114
 MARKETS: List[str] = ["sii", "otc"]
 SEASONS: List[str] = ["01", "02", "03", "04"]
@@ -15,9 +15,11 @@ SEASONS: List[str] = ["01", "02", "03", "04"]
 # =========================
 # 處理選項
 # =========================
-ONLY_MERGE: bool = True  # 設為 True 時只做合併，不下載
 DOWNLOAD_REPORTS: List[str] = ['all']  # 處理所有報表類型
 SAVE_FORMAT: List[str] = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
+ENABLE_DOWNLOAD_REPORTS: bool = False # 是否下載報表資料
+ENABLE_MERGE_REPORTS: bool = False # 是否合併報表資料
+ENABLE_SUMMARY_REPORT: bool = False # 是否自動產生彙總報表
 
 # =========================
 # 目錄設定
@@ -27,6 +29,15 @@ MERGE_DIR: str = "datas/merged_data"
 CSV_OUTPUT_DIR: str = os.path.join(MERGE_DIR, "csv")
 JSON_OUTPUT_DIR: str = os.path.join(MERGE_DIR, "json")
 LOG_PATH: str = os.path.join(MERGE_DIR, "log.json")
+
+# =========================
+# Summary Report 相關預設路徑
+# =========================
+SUMMARY_REPORT_BASE: str = "datas/reports"
+SUMMARY_REPORT_CSV: str = os.path.join(SUMMARY_REPORT_BASE, "csv/summary_report.csv")
+SUMMARY_REPORT_JSON: str = os.path.join(SUMMARY_REPORT_BASE, "json/summary_report.json")
+SUMMARY_DATA_DIR: str = CSV_OUTPUT_DIR
+SUMMARY_PRICE_FILE: str = os.path.join(CSV_OUTPUT_DIR, "latest_stock_prices.csv")
 
 # =========================
 # HTTP 設定

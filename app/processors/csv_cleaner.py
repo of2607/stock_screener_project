@@ -10,7 +10,7 @@ from utils.logger import Logger
 class CSVCleaner:
     """CSV 清理器 - 統一處理各種 CSV 清理需求"""
     
-    def __init__(self, logger: Logger):
+    def __init__(self, logger: Logger, data_sorter=None):
         """
         初始化 CSV 清理器
         
@@ -18,6 +18,8 @@ class CSVCleaner:
             logger: 日誌記錄器
         """
         self.logger = logger
+        # 可注入 DataSorter 實例，否則延遲導入
+        self.data_sorter = data_sorter
     
     def clean_dividend_csv(self, file_path: str) -> pd.DataFrame:
         """
@@ -232,18 +234,15 @@ class CSVCleaner:
         return mask
     
     def _final_sort_dividend(self, df: pd.DataFrame) -> pd.DataFrame:
-        """股利資料最終排序"""
-        if df.empty:
-            return df
-        
-        # 決定排序欄位
-        sort_cols = []
-        if "公司代號" in df.columns:
-            sort_cols = [col for col in ["公司代號", "公司名稱", "股東會日期"] if col in df.columns]
-        elif "公司代號名稱" in df.columns:
-            sort_cols = [col for col in ["公司代號名稱", "股東會日期"] if col in df.columns]
-        
-        if sort_cols:
-            df = df.sort_values(by=sort_cols, ascending=True, ignore_index=True)
-        
-        return df
+        """股利資料最終排序（委託給 DataSorter）"""
+        if self.data_sorter is not None:
+            return self.data_sorter.sort_dividend_report(df)
+        else:
+            # 延遲導入，避免循環依賴
+            try:
+                from .data_sorter import DataSorter
+                sorter = DataSorter(self.logger)
+                return sorter.sort_dividend_report(df)
+            except Exception as e:
+                self.logger.warning(f"DataSorter 無法導入，跳過排序: {e}")
+                return df

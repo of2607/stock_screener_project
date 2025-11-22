@@ -142,6 +142,36 @@ COLUMN_RENAME_MAP: Dict[str, Dict[str, str]] = {
     }
 }
 
+# =========================
+# 語意統一欄位設定（如：所有變體都要統一成同一名稱）
+# 格式：{報表型態: {標準名稱: [所有變體]}}
+# =========================
+SEMANTIC_UNIFY_COLUMNS: Dict[str, Dict[str, list]] = {
+    'income_statement': {
+        '淨利（損）歸屬於母公司業主': [
+            '淨利（損）歸屬於母公司業主',
+            '淨利（淨損）歸屬於母公司業主',
+            '淨利(損)歸屬於母公司業主',
+            '淨利(淨損)歸屬於母公司業主',
+            '淨利－歸屬於母公司業主',
+            '淨利歸屬於母公司業主'
+        ]
+    },
+    'balance_sheet': {
+        '資產總額': [
+            '資產總額',
+            '資產總計'
+        ]
+    }
+    # 其他報表型態可依需求擴充
+}
+
+def get_semantic_unify_columns(report_type: str) -> Dict[str, list]:
+    """
+    取得指定報表型態的語意統一欄位設定
+    """
+    return SEMANTIC_UNIFY_COLUMNS.get(report_type, {})
+
 def get_columns_to_keep(report_type: str) -> List[str]:
     """
     取得指定報表類型要保留的欄位清單
