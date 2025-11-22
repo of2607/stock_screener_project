@@ -17,9 +17,9 @@ SEASONS: List[str] = ["01", "02", "03", "04"]
 # =========================
 DOWNLOAD_REPORTS: List[str] = ['all']  # 處理所有報表類型
 SAVE_FORMAT: List[str] = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
-ENABLE_DOWNLOAD_REPORTS: bool = False # 是否下載報表資料
+ENABLE_DOWNLOAD_REPORTS: bool = True # 是否下載報表資料
 ENABLE_MERGE_REPORTS: bool = True # 是否合併報表資料
-ENABLE_SUMMARY_REPORT: bool = False # 是否自動產生彙總報表
+ENABLE_SUMMARY_REPORT: bool = True # 是否自動產生彙總報表
 
 # =========================
 # 目錄設定
