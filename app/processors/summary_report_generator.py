@@ -60,7 +60,12 @@ class DataLoader:
         # 兼容不同欄位名稱
         code_col = "stock_code" if "stock_code" in df.columns else "代號"
         price_col = "price" if "price" in df.columns else "收盤價"
-        return dict(zip(df[code_col], df[price_col]))
+        date_col = "date" if "date" in df.columns else "日期" if "日期" in df.columns else None
+        # 回傳 dict: {代號: (收盤價, 收盤日)}
+        if date_col:
+            return dict(zip(df[code_col], zip(df[price_col], df[date_col])))
+        else:
+            return dict(zip(df[code_col], zip(df[price_col], [None]*len(df))))
 
     def _collect_yearly_data(self, report: str, years: List[str]) -> pd.DataFrame:
         dfs = []
@@ -156,28 +161,29 @@ class MetricCalculator:
         for code in all_codes:
             name = all_names.get(code, "")
             row = {"股票代號": code, "股票名稱": name}
-            price = safe_float(price_map.get(code, np.nan))
+            price_date = price_map.get(code, (np.nan, None))
+            price = safe_float(price_date[0])
+            close_date = price_date[1]
             row["收盤價"] = price
+            row["收盤日"] = close_date
             eps_years, div_years, yield_years, roe_years = [], [], [], []
             for y in years:
-                # EPS（單季，無重工）
-                prev = None
-                year_eps = []
-                for q in self.quarters:
+                # 僅保留 EPS 累計欄位（Q1=Q1, Q2=Q1+Q2, Q3=Q1+Q2+Q3, Q4=Q1+Q2+Q3+Q4）
+                eps_cumsum = []
+                for i, q in enumerate(self.quarters):
                     curr = eps_lookup.get((code, y, q), np.nan)
-                    if prev is None:
-                        single = curr
+                    if i == 0:
+                        cumsum = curr
                     else:
-                        if not pd.isna(curr) and not pd.isna(prev):
-                            single = curr - prev
+                        if not pd.isna(curr) and not pd.isna(eps_cumsum[-1]):
+                            cumsum = curr + eps_cumsum[-1]
                         else:
-                            single = np.nan
-                    row[f"{y}EPS_{q}"] = single
-                    if not pd.isna(single):
-                        year_eps.append(single)
-                    prev = curr
-                row[f"{y}EPS合計"] = round(sum(year_eps), 2) if year_eps else np.nan
-                eps_years.append(row[f"{y}EPS合計"])
+                            cumsum = np.nan
+                    eps_cumsum.append(cumsum)
+                    # 僅產生「{年度}EPS_Q{n}_累計」欄位
+                    row[f"{y}EPS_Q{i+1}_累計"] = cumsum
+                eps_years.append(eps_cumsum[-1] if eps_cumsum else np.nan)
+                # 完全移除 EPS 合計與所有單季 EPS 欄位（不產生）
                 # 現金股利、殖利率、ROE（簡化流程）
                 year_col = "年度" if "年度" in div_df.columns else "year"
                 cash_div_col = "現金股利" if "現金股利" in div_df.columns else "cash_dividend"
@@ -189,7 +195,9 @@ class MetricCalculator:
                 row[f"{y}現金股利"] = cash_div
                 div_years.append(cash_div)
 
-                price = safe_float(price_map.get(code, np.nan))
+                # 修正殖利率計算與欄位遺失問題
+                price_val = price_map.get(code, (np.nan, None))
+                price = safe_float(price_val[0])
                 div_yield = round(float(cash_div) / float(price) * 100, 2) if not pd.isna(cash_div) and not pd.isna(price) and price != 0 else np.nan
                 row[f"{y}殖利率"] = div_yield
                 yield_years.append(div_yield)
@@ -209,18 +217,18 @@ class MetricCalculator:
             row["近3年平均殖利率"] = avg_last_n(yield_years, 3)
             row["近5年平均ROE"] = avg_last_n(roe_years, 5)
             row["近3年平均ROE"] = avg_last_n(roe_years, 3)
-            # 去年/前年 Q1~Q4 EPS 及差率（以單季 EPS 計算）
+            # 去年/前年 Q1~Q4 EPS 及差率（以累計 EPS 計算）
             if len(years) >= 2:
                 y1, y2 = years[0], years[1]
-                for q in self.quarters:
-                    eps1 = row.get(f"{y1}EPS_{q}", np.nan)
-                    eps2 = row.get(f"{y2}EPS_{q}", np.nan)
-                    row[f"{y1}{q}_EPS"] = eps1
-                    row[f"{y2}{q}_EPS"] = eps2
-                    if not pd.isna(eps1) and not pd.isna(eps2) and eps2 != 0:
-                        row[f"{y1}_vs_{y2}_{q}_EPS差率"] = round((eps1 - eps2) / abs(eps2) * 100, 2)
+                for i, q in enumerate(self.quarters):
+                    eps1_cum = row.get(f"{y1}EPS_Q{i+1}_累計", np.nan)
+                    eps2_cum = row.get(f"{y2}EPS_Q{i+1}_累計", np.nan)
+                    row[f"{y1}{q}_EPS_累計"] = eps1_cum
+                    row[f"{y2}{q}_EPS_累計"] = eps2_cum
+                    if not pd.isna(eps1_cum) and not pd.isna(eps2_cum) and eps2_cum != 0:
+                        row[f"{y1}_vs_{y2}_{q}_EPS累計差率"] = round((eps1_cum - eps2_cum) / abs(eps2_cum) * 100, 2)
                     else:
-                        row[f"{y1}_vs_{y2}_{q}_EPS差率"] = np.nan
+                        row[f"{y1}_vs_{y2}_{q}_EPS累計差率"] = np.nan
             report_rows.append(row)
         return report_rows
 
@@ -228,12 +236,15 @@ class ReportAssembler:
     @staticmethod
     def assemble(metrics: List[Dict]) -> pd.DataFrame:
         df_report = pd.DataFrame(metrics)
-        # 重新排序欄位：股票代號、股票名稱、收盤價在最前面
+        # 重新排序欄位：股票代號、股票名稱、收盤價、收盤日、EPS累計（依年度、Q順序）
         cols = list(df_report.columns)
-        for col in ["股票代號", "股票名稱", "收盤價"]:
-            if col in cols:
-                cols.remove(col)
-        df_report = df_report[["股票代號", "股票名稱", "收盤價"] + cols]
+        priority = ["股票代號", "股票名稱", "收盤價", "收盤日"]
+        # 僅保留 EPS 累計欄位，且依年度、Q順序排列
+        eps_cols = [c for c in cols if "EPS_Q" in c and "累計" in c]
+        eps_cols.sort()  # 預設排序：年度Q順
+        # 其他欄位（排除已在 priority/eps_cols 的）
+        others = [c for c in cols if c not in priority + eps_cols]
+        df_report = df_report[priority + eps_cols + others]
         df_report = df_report.sort_values(by=["股票代號"]).reset_index(drop=True)
         return df_report
 
