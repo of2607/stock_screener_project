@@ -1,8 +1,3 @@
-## TODO
-[ ] 所有 EPS 都要看累計
-[ ] 收盤價加上收盤日期
-
-
 
 - 用supabase function 抓最新收盤價存到supabase
   上市
