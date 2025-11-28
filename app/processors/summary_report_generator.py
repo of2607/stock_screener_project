@@ -172,8 +172,7 @@ class MetricCalculator:
                 curr = eps_lookup.get((code, y, "Q4"), np.nan)
                 row[f"{y}EPS_年度"] = curr
                 eps_years.append(curr)
-                # 完全移除 EPS 合計與所有單季 EPS 欄位（不產生）
-                # 現金股利、殖利率、ROE（簡化流程）
+                # 現金股利
                 year_col = "年度" if "年度" in div_df.columns else "year"
                 cash_div_col = "現金股利" if "現金股利" in div_df.columns else "cash_dividend"
                 cash_div = np.nan
@@ -183,14 +182,13 @@ class MetricCalculator:
                         cash_div = safe_float(div_row.iloc[0][cash_div_col])
                 row[f"{y}現金股利"] = cash_div
                 div_years.append(cash_div)
-
-                # 修正殖利率計算與欄位遺失問題
+                # 殖利率
                 price_val = price_map.get(code, (np.nan, None))
                 price = safe_float(price_val[0])
                 div_yield = round(float(cash_div) / float(price) * 100, 2) if not pd.isna(cash_div) and not pd.isna(price) and price != 0 else np.nan
                 row[f"{y}殖利率"] = div_yield
                 yield_years.append(div_yield)
-
+                # ROE
                 profit = profit_lookup.get((code, y), np.nan)
                 avg_equity = self.calc_avg_equity(equity_lookup, code, y)
                 roe = round(profit / avg_equity * 100, 2) if not pd.isna(profit) and not pd.isna(avg_equity) and avg_equity != 0 else np.nan
@@ -200,6 +198,7 @@ class MetricCalculator:
             def avg_last_n(lst, n):
                 vals = [v for v in lst[:n] if not pd.isna(v)]
                 return round(np.mean(vals), 2) if vals else np.nan
+            # 近N年平均統計都只取前N年（排除當年），slice 0~N
             row["近5年平均股息"] = avg_last_n(div_years, 5)
             row["近3年平均股息"] = avg_last_n(div_years, 3)
             row["近5年平均殖利率"] = avg_last_n(yield_years, 5)
@@ -212,6 +211,7 @@ class MetricCalculator:
                 for i, q in enumerate(self.quarters):
                     eps1 = eps_lookup.get((code, y1, q), np.nan)
                     eps2 = eps_lookup.get((code, y2, q), np.nan)
+                    # 只顯示前一年（y2）與當年（y1）各季 EPS 差率
                     row[f"{y1}{q}_EPS"] = eps1
                     row[f"{y2}{q}_EPS"] = eps2
                     if not pd.isna(eps1) and not pd.isna(eps2) and eps2 != 0:
@@ -225,29 +225,33 @@ class ReportAssembler:
     @staticmethod
     def assemble(metrics: List[Dict]) -> pd.DataFrame:
         df_report = pd.DataFrame(metrics)
-        # 重新排序欄位：股票代號、股票名稱、收盤價、收盤日、EPS累計（依年度、Q順序）
+        # 重新排序欄位：股票代號、股票名稱、收盤價、收盤日、逐年 EPS/現金股利/殖利率/ROE
         cols = list(df_report.columns)
         priority = ["股票代號", "股票名稱", "收盤價", "收盤日"]
-        # 近兩年顯示 Q1~Q4 EPS，其他年僅顯示年度 EPS
-        eps_cols = []
-        # 取得近兩年年份
-        year_keys = []
-        for c in cols:
-            if c.endswith('EPS_Q1'):
-                year_keys.append(c[:3])
-        year_keys = year_keys[:2]
-        # 近兩年 Q1~Q4
-        for y in year_keys:
-            for q in range(1, 5):
-                col = f"{y}EPS_Q{q}"
-                if col in cols:
-                    eps_cols.append(col)
-        # 其他年年度 EPS
-        for c in cols:
-            if c.endswith('EPS_年度'):
-                eps_cols.append(c)
-        others = [c for c in cols if c not in priority + eps_cols]
-        df_report = df_report[priority + eps_cols + others]
+        # 取得所有年度（如 '113', '112', ...）
+        year_set = set()
+        for row in metrics:
+            for k in row.keys():
+                if k.endswith('EPS_年度') and len(k) >= 6:
+                    year_set.add(k[:3])
+        years = sorted(year_set, reverse=True)
+        # 欄位類型順序
+        col_types = ["現金股利", "殖利率", "ROE", "EPS_年度"]
+        year_cols = []
+        missing_cols = []
+        for col_type in col_types:
+            for y in years:
+                col = f"{y}{col_type}"
+                year_cols.append(col)
+                if col not in df_report.columns:
+                    missing_cols.append(col)
+        # 一次性補齊所有缺少欄位
+        if missing_cols:
+            nan_df = pd.DataFrame(np.nan, index=df_report.index, columns=missing_cols)
+            df_report = pd.concat([df_report, nan_df], axis=1)
+        # 其他欄位自動排後
+        others = [c for c in df_report.columns if c not in priority + year_cols]
+        df_report = df_report[priority + year_cols + others]
         df_report = df_report.sort_values(by=["股票代號"]).reset_index(drop=True)
         return df_report
 
@@ -335,7 +339,7 @@ def main():
         data_sorter,
         report_processor,
     )
-    YEARS = get_recent_roc_years(DEFAULT_SUMMARY_YEARS)
+    YEARS = get_recent_roc_years(DEFAULT_SUMMARY_YEARS+1)
     generator.generate(
         years=YEARS,
         output_csv=DEFAULT_REPORT_CSV,

@@ -318,5 +318,115 @@
       "json": "datas/merged_data/json/latest_stock_prices.json"
     },
     "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:06:56",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:19:37",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:28:07",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:32:14",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:33:46",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:36:17",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:38:09",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:42:04",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T02:49:31",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T03:02:35",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-11-29T03:12:17",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2341
   }
 ]
