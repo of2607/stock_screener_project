@@ -35,6 +35,12 @@ POST_REPORT_TASKS = [
         "module": "processors.summary_report_generator",
         "entry": "main"
     },
+    {
+        "enable_flag": "UPLOAD_SUMMARY_REPORT",
+        "desc": "上傳自動產生的彙總報表",
+        "module": "processors.summary_report_upload",
+        "entry": "main"
+    },
     # 未來可在此擴充更多報表產生任務
 ]
 

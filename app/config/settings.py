@@ -1,14 +1,16 @@
 """
 TWSE 資料下載工具 - 基本設定
 """
+
 from typing import List, Dict
 import os
+from utils.date_utils import get_current_roc_year
 
 # =========================
 # 基本處理參數
 # =========================
-START_YEAR: int = 114
-END_YEAR: int = 114
+START_YEAR: int = get_current_roc_year()
+END_YEAR: int = get_current_roc_year()
 MARKETS: List[str] = ["sii", "otc"]
 SEASONS: List[str] = ["01", "02", "03", "04"]
 
@@ -20,6 +22,8 @@ SAVE_FORMAT: List[str] = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'j
 ENABLE_DOWNLOAD_REPORTS: bool = False # 是否下載報表資料
 ENABLE_MERGE_REPORTS: bool = False # 是否合併報表資料
 ENABLE_SUMMARY_REPORT: bool = True # 是否自動產生彙總報表
+UPLOAD_SUMMARY_REPORT: bool = True # 是否上傳自動產生的彙總報表
+UPLOAD_SUMMARY_REPORT_TARGET: List[str] = ["all"]  # r2, gdrive, supabase
 
 # =========================
 # 目錄設定
