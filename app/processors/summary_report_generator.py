@@ -265,7 +265,7 @@ class ReportExporter:
         if output_csv:
             df.to_csv(output_csv, index=False, encoding="utf-8-sig")
         if output_json:
-            df.to_json(output_json, orient="records", force_ascii=False, indent=2)
+            df.to_json(output_json, orient="records", force_ascii=False, indent=2, encoding="utf-8")
 
 def safe_float(val: Any) -> float:
     try:
