@@ -43,6 +43,23 @@ SUMMARY_LOG_DIR: str = os.path.join(LOG_DIR_BASE, "summary_report_log.json")
 SUMMARY_YEARS = 5  # 預設彙總報表的年份數
 
 # =========================
+# 上傳相關獨立設定
+# =========================
+# Google Drive Apps Script 設定 ( as@poohsreg )
+GDRIVE_AS_URL: str = "https://script.google.com/macros/s/AKfycbwFR-OoFF4aO42MVVA2VYURTDLIWEXN8J4A2LQIe3duqm_yG2mpOYhDIhmfwBADBwuxyA/exec"
+GDRIVE_FOLDER_ID: str = "12ar4cYTO8zq8xgLY76cljn5b_bA2q6ux"
+# Supabase 設定 ( supabase@of2607 )
+SUPABASE_URL: str = "https://btzjjozytwtbgdznralj.supabase.co"
+SUPABASE_KEY: str = "sb_secret_fjzIJ8cx3xnsE8xQ18-AMw_ctrb8gkD"
+SUPABASE_BUCKET: str = "public-data/reports"
+# Cloudflare R2 設定 ( cloudflare@of2607 )
+R2_ACCOUNT_ID: str = "67d73f06307398dd3a9f766976a5efec"
+R2_ACCESS_KEY: str = "7a33a736d0b434c6d92348f8d3778329"
+R2_SECRET_KEY: str = "0e6a600b9e4c54ffdd313f4575600001ccef79cd19c02aa39ebb97f1f1d9efaf"
+R2_BUCKET: str = "stock-reports"
+R2_REGION: str = "auto"
+
+# =========================
 # HTTP 設定
 # =========================
 HEADERS: Dict[str, str] = {
