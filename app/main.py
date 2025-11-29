@@ -6,6 +6,7 @@ TWSE 資料下載與合併工具 - 優化版本 V2
 """
 import os
 import sys
+import argparse
 import asyncio
 
 # 加入當前路徑以確保模組可以正確匯入
@@ -37,13 +38,51 @@ POST_REPORT_TASKS = [
     # 未來可在此擴充更多報表產生任務
 ]
 
+def str2bool(v):
+    return str(v).lower() in ("yes", "true", "t", "1")
+
+def override_settings_from_args(settings):
+    parser = argparse.ArgumentParser()
+    # 只抓全大寫的設定
+    setting_keys = [k for k in dir(settings) if k.isupper() and not k.startswith("_")]
+    for k in setting_keys:
+        v = getattr(settings, k)
+        if isinstance(v, bool):
+            parser.add_argument(f"--{k}", type=str)
+        elif isinstance(v, int):
+            parser.add_argument(f"--{k}", type=int)
+        elif isinstance(v, float):
+            parser.add_argument(f"--{k}", type=float)
+        elif isinstance(v, list):
+            parser.add_argument(f"--{k}", type=str)
+        else:
+            parser.add_argument(f"--{k}", type=str)
+    args, _ = parser.parse_known_args()
+    for k in setting_keys:
+        arg_val = getattr(args, k, None)
+        if arg_val is not None:
+            v = getattr(settings, k)
+            if isinstance(v, bool):
+                setattr(settings, k, str2bool(arg_val))
+            elif isinstance(v, list):
+                # 支援逗號分隔或單一字串
+                if isinstance(arg_val, str):
+                    val = [x.strip() for x in arg_val.split(',') if x.strip()]
+                else:
+                    val = list(arg_val)
+                setattr(settings, k, val)
+            else:
+                setattr(settings, k, arg_val)
+
 async def main():
     """
     依任務清單以 async/await 方式依序執行所有主流程與後置報表產生任務。
     「抓取最新股價」必須 await 完成後，才能 await「彙總表」產生。
     """
     from importlib import import_module
+
     from config import settings
+    override_settings_from_args(settings)
 
     for i, task in enumerate(POST_REPORT_TASKS):
         if task["enable_flag"] is None:
