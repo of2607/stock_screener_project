@@ -31,7 +31,7 @@ jobs:
 
       - name: Run summary report
         run: |
-          python main.py --START_YEAR=114 --END_YEAR=114 --ENABLE_DOWNLOAD_REPORTS=False --ENABLE_MERGE_REPORTS=False --ENABLE_SUMMARY_REPORT=True
+          python main.py --ENABLE_DOWNLOAD_REPORTS=False --ENABLE_MERGE_REPORTS=False --ENABLE_SUMMARY_REPORT=True --UPLOAD_SUMMARY_REPORT=True
 
       - name: Commit and push changes
         run: |
