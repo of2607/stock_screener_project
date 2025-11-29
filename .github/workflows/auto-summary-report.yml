@@ -13,8 +13,11 @@ jobs:
       run:
         working-directory: app
     steps:
-      - name: Checkout repository
+      - name: Checkout auto-update branch (or create if missing)
         uses: actions/checkout@v4
+        with:
+          ref: auto-update
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,7 +40,7 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git add .
             git commit -m "auto: daily summary report update [skip ci]"
-            git push
+            git push origin HEAD:auto-update
           else
             echo "No changes to commit."
           fi
