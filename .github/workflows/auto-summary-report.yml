@@ -1,0 +1,45 @@
+name: Daily Summary Report
+
+on:
+  schedule:
+    # 每日 2:00 (台灣時間, UTC+8)，等於 UTC 18:00
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-summary-report:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run summary report
+        run: |
+          python main.py --START_YEAR=114 --END_YEAR=114 --ENABLE_DOWNLOAD_REPORTS=False --ENABLE_MERGE_REPORTS=False --ENABLE_SUMMARY_REPORT=True
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "auto: daily summary report update [skip ci]"
+            git push
+          else
+            echo "No changes to commit."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
