@@ -22,7 +22,8 @@ function doPost(e) {
     var files = folder.getFilesByName(fileName);
     if (files.hasNext()) {
       var file = files.next();
-      file.setContent(blob);
+      // 直接用 setContent(blob.getBytes()) 以二進位覆蓋
+      file.setContent(blob.getBytes());
       return ContentService.createTextOutput('Success: ' + file.getUrl() + ' (updated, versioned)');
     } else {
       var newFile = folder.createFile(blob);
