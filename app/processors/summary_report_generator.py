@@ -105,6 +105,35 @@ class LookupBuilder:
         return lookup
 
 class MetricCalculator:
+    def calc_single_quarter_eps(self, eps_lookup, code, seasons_sorted):
+        """回傳近四季單季EPS清單（由舊到新）"""
+        single_eps = []
+        for i in range(1, len(seasons_sorted)):
+            curr_y, curr_q = seasons_sorted[i][:3], seasons_sorted[i][3:]
+            prev_y, prev_q = seasons_sorted[i-1][:3], seasons_sorted[i-1][3:]
+            curr_eps = eps_lookup.get((code, curr_y, curr_q), np.nan)
+            prev_eps = eps_lookup.get((code, prev_y, prev_q), np.nan)
+            if curr_q == "Q1":
+                single = curr_eps
+            elif curr_y == prev_y and not pd.isna(curr_eps) and not pd.isna(prev_eps):
+                single = curr_eps - prev_eps
+            else:
+                single = np.nan
+            single_eps.append(single)
+        return single_eps
+
+    def calc_eps_diff_rate(self, eps_lookup, code, y, q):
+        """計算累計EPS差率"""
+        try:
+            y_prev = str(int(y) - 1)
+        except Exception:
+            y_prev = ''
+        eps_now = eps_lookup.get((code, y, q), np.nan)
+        eps_prev = eps_lookup.get((code, y_prev, q), np.nan)
+        if not pd.isna(eps_now) and not pd.isna(eps_prev) and eps_prev != 0:
+            return round((eps_now - eps_prev) / abs(eps_prev) * 100, 2)
+        else:
+            return np.nan
     def __init__(self, quarters: List[str]):
         self.quarters = quarters
 
@@ -158,66 +187,89 @@ class MetricCalculator:
         ]).drop_duplicates().set_index(code_col)[name_col].to_dict()
 
         report_rows = []
+        # 預先快取 lookup，減少重複查詢
+        eps_lookup_cache = eps_lookup
+        profit_lookup_cache = profit_lookup
+        equity_lookup_cache = equity_lookup
+        price_map_cache = price_map
         for code in all_codes:
             name = all_names.get(code, "")
             row = {"股票代號": code, "股票名稱": name}
-            price_date = price_map.get(code, (np.nan, None))
+            price_date = price_map_cache.get(code, (np.nan, None))
             price = safe_float(price_date[0])
             close_date = price_date[1]
             row["收盤價"] = price
             row["收盤日"] = close_date
             eps_years, div_years, yield_years, roe_years = [], [], [], []
             for y in years:
-                # 所有年度顯示 Q4（年度）EPS
-                curr = eps_lookup.get((code, y, "Q4"), np.nan)
+                curr = eps_lookup_cache.get((code, y, "Q4"), np.nan)
                 row[f"{y}EPS_年度"] = curr
                 eps_years.append(curr)
-                # 現金股利
                 year_col = "年度" if "年度" in div_df.columns else "year"
                 cash_div_col = "現金股利" if "現金股利" in div_df.columns else "cash_dividend"
                 cash_div = np.nan
                 if all(col in div_df.columns for col in [code_col, year_col, cash_div_col]):
-                    div_row = div_df[(div_df[code_col] == code) & (div_df[year_col] == y)]
-                    if not div_row.empty:
-                        cash_div = safe_float(div_row.iloc[0][cash_div_col])
+                    div_rows = div_df[(div_df[code_col] == code) & (div_df[year_col] == y)]
+                    if not div_rows.empty:
+                        cash_div_sum = div_rows[cash_div_col].apply(safe_float).sum()
+                        cash_div = round(cash_div_sum, 2)
                 row[f"{y}現金股利"] = cash_div
                 div_years.append(cash_div)
-                # 殖利率
-                price_val = price_map.get(code, (np.nan, None))
+                price_val = price_map_cache.get(code, (np.nan, None))
                 price = safe_float(price_val[0])
                 div_yield = round(float(cash_div) / float(price) * 100, 2) if not pd.isna(cash_div) and not pd.isna(price) and price != 0 else np.nan
                 row[f"{y}殖利率"] = div_yield
                 yield_years.append(div_yield)
-                # ROE
-                profit = profit_lookup.get((code, y), np.nan)
-                avg_equity = self.calc_avg_equity(equity_lookup, code, y)
+                profit = profit_lookup_cache.get((code, y), np.nan)
+                avg_equity = self.calc_avg_equity(equity_lookup_cache, code, y)
                 roe = round(profit / avg_equity * 100, 2) if not pd.isna(profit) and not pd.isna(avg_equity) and avg_equity != 0 else np.nan
                 row[f"{y}ROE"] = roe
                 roe_years.append(roe)
-            # 平均計算
             def avg_last_n(lst, n):
                 vals = [v for v in lst[:n] if not pd.isna(v)]
                 return round(np.mean(vals), 2) if vals else np.nan
-            # 近N年平均統計都只取前N年（排除當年），slice 0~N
-            row["近5年平均股息"] = avg_last_n(div_years, 5)
             row["近3年平均股息"] = avg_last_n(div_years, 3)
-            row["近5年平均殖利率"] = avg_last_n(yield_years, 5)
+            row["近5年平均股息"] = avg_last_n(div_years, 5)
+            row["近8年平均股息"] = avg_last_n(div_years, 8)
             row["近3年平均殖利率"] = avg_last_n(yield_years, 3)
-            row["近5年平均ROE"] = avg_last_n(roe_years, 5)
+            row["近5年平均殖利率"] = avg_last_n(yield_years, 5)
+            row["近8年平均殖利率"] = avg_last_n(yield_years, 8)
             row["近3年平均ROE"] = avg_last_n(roe_years, 3)
-            # 當年與前一年各季 EPS 差率（如有各季資料則顯示）
-            if len(years) >= 2:
-                y1, y2 = years[0], years[1]
-                for i, q in enumerate(self.quarters):
-                    eps1 = eps_lookup.get((code, y1, q), np.nan)
-                    eps2 = eps_lookup.get((code, y2, q), np.nan)
-                    # 只顯示前一年（y2）與當年（y1）各季 EPS 差率
-                    row[f"{y1}{q}_EPS"] = eps1
-                    row[f"{y2}{q}_EPS"] = eps2
-                    if not pd.isna(eps1) and not pd.isna(eps2) and eps2 != 0:
-                        row[f"{y1}_vs_{y2}_{q}_EPS差率"] = round((eps1 - eps2) / abs(eps2) * 100, 2)
-                    else:
-                        row[f"{y1}_vs_{y2}_{q}_EPS差率"] = np.nan
+            row["近5年平均ROE"] = avg_last_n(roe_years, 5)
+            row["近8年平均ROE"] = avg_last_n(roe_years, 8)
+            # 取得所有可用的年度與季別，組成完整的季序列（新到舊）
+            all_seasons = []
+            for y in years:
+                for q in reversed(self.quarters):
+                    all_seasons.append(f"{y}{q}")
+            # 近八季逐季EPS（顯示累計值）
+            last_8_seasons = all_seasons[1:9]
+            for season in reversed(last_8_seasons):
+                y, q = season[:3], season[3:]
+                eps = eps_lookup_cache.get((code, y, q), np.nan)
+                row[f"{season}_EPS"] = eps
+            # 近四季逐季EPS與前同期EPS差率（不含當季）
+            last_4_seasons = all_seasons[1:5]
+            for season in reversed(last_4_seasons):
+                y, q = season[:3], season[3:]
+                eps_now = eps_lookup_cache.get((code, y, q), np.nan)
+                try:
+                    y_prev = str(int(y) - 1)
+                except Exception:
+                    y_prev = ''
+                eps_prev = eps_lookup_cache.get((code, y_prev, q), np.nan)
+                row[f"{y}{q}_EPS"] = eps_now
+                row[f"{y_prev}{q}_EPS"] = eps_prev
+                row[f"{y}{q}_vs_{y_prev}{q}_EPS差率"] = self.calc_eps_diff_rate(eps_lookup_cache, code, y, q)
+            # 近四季EPS總合（放最後）
+            last_5_seasons = all_seasons[1:6]
+            def season_sort_key(season):
+                y, q = season[:3], season[3:]
+                q_map = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
+                return (int(y), q_map.get(q, 0))
+            last_5_seasons_sorted = sorted(last_5_seasons, key=season_sort_key)
+            eps_4q = self.calc_single_quarter_eps(eps_lookup_cache, code, last_5_seasons_sorted)
+            row["近四季EPS總合"] = round(np.nansum(eps_4q), 2) if any([not pd.isna(e) for e in eps_4q]) else np.nan
             report_rows.append(row)
         return report_rows
 
@@ -249,9 +301,12 @@ class ReportAssembler:
         if missing_cols:
             nan_df = pd.DataFrame(np.nan, index=df_report.index, columns=missing_cols)
             df_report = pd.concat([df_report, nan_df], axis=1)
-        # 其他欄位自動排後
-        others = [c for c in df_report.columns if c not in priority + year_cols]
-        df_report = df_report[priority + year_cols + others]
+        # 其他欄位自動排後，並將「近四季EPS總合」移到最後
+        others = [c for c in df_report.columns if c not in priority + year_cols and c != "近四季EPS總合"]
+        if "近四季EPS總合" in df_report.columns:
+            df_report = df_report[priority + year_cols + others + ["近四季EPS總合"]]
+        else:
+            df_report = df_report[priority + year_cols + others]
         df_report = df_report.sort_values(by=["股票代號"]).reset_index(drop=True)
         return df_report
 

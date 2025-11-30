@@ -44,13 +44,13 @@ REPORT_JSON_DIR: str = os.path.join(REPORT_DATA_DIR, "json/summary_report.json")
 SUMMARY_FROM_DIR: str = MERGED_CSV_DIR
 SUMMARY_PRICE_FILE: str = os.path.join(MERGED_CSV_DIR, "latest_stock_prices.csv")
 SUMMARY_LOG_DIR: str = os.path.join(LOG_DIR_BASE, "summary_report_log.json")
-SUMMARY_YEARS = 5  # 預設彙總報表的年份數
+SUMMARY_YEARS = 8  # 預設彙總報表的年份數
 
 # =========================
 # 上傳相關獨立設定
 # =========================
 # Google Drive Apps Script 設定 ( as@poohsreg )
-GDRIVE_AS_URL: str = "https://script.google.com/macros/s/AKfycbwFR-OoFF4aO42MVVA2VYURTDLIWEXN8J4A2LQIe3duqm_yG2mpOYhDIhmfwBADBwuxyA/exec"
+GDRIVE_AS_URL: str = "https://script.google.com/macros/s/AKfycbxpdvseNcLthew9C9VPAFiCtzDQdDvTcHWN0hc2x9PCusZhvoWmWyvOKJIzzFyabTk8kA/exec"
 GDRIVE_FOLDER_ID: str = "12ar4cYTO8zq8xgLY76cljn5b_bA2q6ux"
 # Supabase 設定 ( supabase@of2607 )
 SUPABASE_URL: str = "https://btzjjozytwtbgdznralj.supabase.co"
