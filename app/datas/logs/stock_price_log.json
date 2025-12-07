@@ -738,5 +738,75 @@
       "json": "datas/merged_data/json/latest_stock_prices.json"
     },
     "total_rows": 2293
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-08T00:38:48",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2293
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-08T00:45:37",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2293
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-08T01:26:15",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2293
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-08T01:33:32",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2293
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-08T01:39:52",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2293
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-08T01:53:05",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2293
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-08T01:53:45",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 2293
   }
 ]

@@ -35,10 +35,18 @@ class DataLoader:
         self.price_file = price_file
 
     def load(self, years: List[str]) -> Dict[str, pd.DataFrame]:
+        # 為了計算 ROE（需要前一年 Q4 作為期初），自動加入最早年份的前一年
+        extended_years = years.copy()
+        if years:
+            earliest_year = min([int(y) for y in years])
+            prev_year = str(earliest_year - 1)
+            if prev_year not in extended_years:
+                extended_years.append(prev_year)
+        
         return {
-            "eps_df": self._collect_yearly_data("income_statement", years),
-            "div_df": self._collect_yearly_data("dividend", years),
-            "bs_df": self._collect_yearly_data("balance_sheet", years),
+            "eps_df": self._collect_yearly_data("income_statement", extended_years),
+            "div_df": self._collect_yearly_data("dividend", years),  # 股利不需要前一年
+            "bs_df": self._collect_yearly_data("balance_sheet", extended_years),  # 資產負債需要前一年 Q4
             "price_map": self._get_latest_price_map(),
         }
 
@@ -90,10 +98,23 @@ class LookupBuilder:
 
     @staticmethod
     def build_profit_lookup(df: pd.DataFrame) -> Dict:
+        """
+        取得年度淨利。由於財報淨利為累計值，直接取 Q4 作為全年淨利。
+        優先使用「本期淨利（淨損）」以符合 GoodInfo 計算標準，若無則回退使用「淨利（損）歸屬於母公司業主」。
+        """
         lookup = {}
         for _, row in df.iterrows():
-            key = (row.get("代號"), row.get("年度"))
-            lookup[key] = safe_float(row.get("淨利（損）歸屬於母公司業主"))
+            code = row.get("代號")
+            year = row.get("年度")
+            quarter = row.get("季別")
+            # 優先使用「本期淨利（淨損）」，符合 GoodInfo 標準
+            profit = safe_float(row.get("本期淨利（淨損）"))
+            # 若無「本期淨利（淨損）」，則使用「淨利（損）歸屬於母公司業主」作為回退
+            if pd.isna(profit):
+                profit = safe_float(row.get("淨利（損）歸屬於母公司業主"))
+            # 只取 Q4（全年累計）作為年度淨利
+            if quarter == "Q4" and not pd.isna(profit):
+                lookup[(code, year)] = profit
         return lookup
 
     @staticmethod
@@ -101,7 +122,7 @@ class LookupBuilder:
         lookup = {}
         for _, row in df.iterrows():
             key = (row.get("代號"), row.get("年度"), row.get("季別"))
-            lookup[key] = safe_float(row.get("歸屬於母公司業主之權益合計"))
+            lookup[key] = safe_float(row.get("權益總計"))
         return lookup
 
 class MetricCalculator:
@@ -138,9 +159,25 @@ class MetricCalculator:
         self.quarters = quarters
 
     def calc_avg_equity(self, equity_lookup, code, year) -> float:
-        vals = [equity_lookup.get((code, year, q), np.nan) for q in self.quarters]
-        vals = [v for v in vals if not pd.isna(v)]
-        return np.mean(vals) if vals else np.nan
+        """
+        計算平均權益：使用期初(前一年Q4)和期末(當年Q4)的平均值。
+        這是符合 GoodInfo 等財經網站的 ROE 計算標準方法。
+        """
+        # 期初：前一年 Q4
+        prev_year = str(int(year) - 1)
+        begin_equity = equity_lookup.get((code, prev_year, "Q4"), np.nan)
+        
+        # 期末：當年 Q4
+        end_equity = equity_lookup.get((code, year, "Q4"), np.nan)
+        
+        if not pd.isna(begin_equity) and not pd.isna(end_equity):
+            return (begin_equity + end_equity) / 2
+        elif not pd.isna(end_equity):
+            return end_equity
+        elif not pd.isna(begin_equity):
+            return begin_equity
+        else:
+            return np.nan
 
     def calc_div_yield(self, cash_div, price) -> float:
         try:
