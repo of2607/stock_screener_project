@@ -296,6 +296,20 @@ class MetricCalculator:
             last_5_seasons_sorted = sorted(all_seasons[1:6], key=lambda s: (int(s[:3]), {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}.get(s[3:], 0)))
             eps_4q = self.calc_single_quarter_eps(eps_lookup_cache, code, last_5_seasons_sorted)
             row["近四季EPS總合"] = round(np.nansum(eps_4q), 2) if any([not pd.isna(e) for e in eps_4q]) else np.nan
+            
+            # 近四季EPS總合vs前一年度EPS差率
+            recent_4q_eps = row.get("近四季EPS總合", np.nan)
+            if len(years) > 1:
+                prev_year = years[1]  # 前一年度（years[0]是最新年度）
+                prev_year_eps = row.get(f"{prev_year}EPS_年度", np.nan)
+                if not pd.isna(recent_4q_eps) and not pd.isna(prev_year_eps) and prev_year_eps != 0:
+                    diff_rate = round((recent_4q_eps - prev_year_eps) / abs(prev_year_eps) * 100, 2)
+                else:
+                    diff_rate = np.nan
+            else:
+                diff_rate = np.nan
+            row["近四季_vs_前年度_EPS差率"] = diff_rate
+            
             report_rows.append(row)
         return report_rows
 
@@ -327,12 +341,11 @@ class ReportAssembler:
         if missing_cols:
             nan_df = pd.DataFrame(np.nan, index=df_report.index, columns=missing_cols)
             df_report = pd.concat([df_report, nan_df], axis=1)
-        # 其他欄位自動排後，並將「近四季EPS總合」移到最後
-        others = [c for c in df_report.columns if c not in priority + year_cols and c != "近四季EPS總合"]
-        if "近四季EPS總合" in df_report.columns:
-            df_report = df_report[priority + year_cols + others + ["近四季EPS總合"]]
-        else:
-            df_report = df_report[priority + year_cols + others]
+        # 其他欄位自動排後，並將「近四季EPS總合」及其差率移到最後
+        special_cols = ["近四季EPS總合", "近四季EPS總合vs前一年度EPS差率"]
+        others = [c for c in df_report.columns if c not in priority + year_cols + special_cols]
+        final_special = [c for c in special_cols if c in df_report.columns]
+        df_report = df_report[priority + year_cols + others + final_special]
         df_report = df_report.sort_values(by=["股票代號"]).reset_index(drop=True)
         return df_report
 
