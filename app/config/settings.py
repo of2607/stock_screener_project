@@ -78,7 +78,7 @@ RETRY_DELAY: float = 2.0
 # 股價相關設定
 # =========================
 # 股價過濾條件
-STOCK_MIN_PRICE: float = 10.0  # 最小股價門檻
+STOCK_MIN_PRICE: float = 0  # 最小股價門檻
 
 # 原始資料保留天數
 RAW_DATA_RETENTION_DAYS: int = 7  # 保留7天的原始資料
