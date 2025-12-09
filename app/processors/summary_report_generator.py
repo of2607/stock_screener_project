@@ -249,7 +249,7 @@ class MetricCalculator:
             price = safe_float(price)
             row["收盤價"] = price
             row["收盤日"] = close_date
-            eps_years, div_years, yield_years, roe_years = [], [], [], []
+            eps_years, div_years, yield_years, roe_years, payout_years = [], [], [], [], []
             year_col = "年度" if "年度" in div_df.columns else "year"
             cash_div_col = "現金股利" if "現金股利" in div_df.columns else "cash_dividend"
             for y in years:
@@ -267,15 +267,22 @@ class MetricCalculator:
                 roe = round(profit / avg_equity * 100, 2) if not pd.isna(profit) and not pd.isna(avg_equity) and avg_equity != 0 else np.nan
                 row[f"{y}ROE"] = roe
                 roe_years.append(roe)
-            row["近3年平均股息"] = avg_last_n(div_years, 3)
-            row["近5年平均股息"] = avg_last_n(div_years, 5)
-            row["近8年平均股息"] = avg_last_n(div_years, 8)
-            row["近3年平均殖利率"] = avg_last_n(yield_years, 3)
-            row["近5年平均殖利率"] = avg_last_n(yield_years, 5)
-            row["近8年平均殖利率"] = avg_last_n(yield_years, 8)
-            row["近3年平均ROE"] = avg_last_n(roe_years, 3)
-            row["近5年平均ROE"] = avg_last_n(roe_years, 5)
-            row["近8年平均ROE"] = avg_last_n(roe_years, 8)
+                # 計算配息率 = 現金股利 / EPS × 100（不顯示年度配息率，僅用於計算平均值）
+                payout_ratio = round(float(cash_div) / float(curr) * 100, 2) if not pd.isna(cash_div) and not pd.isna(curr) and curr != 0 else np.nan
+                payout_years.append(payout_ratio)
+            # 近N年平均：排除當前年度（years[0]），只計算完整的過去N年
+            row["近3年平均股息"] = avg_last_n(div_years[1:], 3)
+            row["近5年平均股息"] = avg_last_n(div_years[1:], 5)
+            row["近8年平均股息"] = avg_last_n(div_years[1:], 8)
+            row["近3年平均殖利率"] = avg_last_n(yield_years[1:], 3)
+            row["近5年平均殖利率"] = avg_last_n(yield_years[1:], 5)
+            row["近8年平均殖利率"] = avg_last_n(yield_years[1:], 8)
+            row["近3年平均ROE"] = avg_last_n(roe_years[1:], 3)
+            row["近5年平均ROE"] = avg_last_n(roe_years[1:], 5)
+            row["近8年平均ROE"] = avg_last_n(roe_years[1:], 8)
+            row["近3年平均配息率"] = avg_last_n(payout_years[1:], 3)
+            row["近5年平均配息率"] = avg_last_n(payout_years[1:], 5)
+            row["近8年平均配息率"] = avg_last_n(payout_years[1:], 8)
             # 取得所有可用的年度與季別，組成完整的季序列（新到舊）
             all_seasons = [f"{y}{q}" for y in years for q in reversed(self.quarters)]
             # 近八季逐季EPS（顯示累計值）
