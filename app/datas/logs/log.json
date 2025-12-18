@@ -1938,5 +1938,225 @@
       "json": "datas/merged_data/json/114-balance_sheet.json"
     },
     "total_rows": 5769
+  },
+  {
+    "year": "114",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:39:04",
+    "files": {
+      "csv": "datas/merged_data/csv/114-income_statement.csv",
+      "json": "datas/merged_data/json/114-income_statement.json"
+    },
+    "total_rows": 5769
+  },
+  {
+    "year": "114",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:44:07",
+    "files": {
+      "csv": "datas/merged_data/csv/114-income_statement.csv",
+      "json": "datas/merged_data/json/114-income_statement.json"
+    },
+    "total_rows": 5769
+  },
+  {
+    "year": "114",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:45:03",
+    "files": {
+      "csv": "datas/merged_data/csv/114-income_statement.csv",
+      "json": "datas/merged_data/json/114-income_statement.json"
+    },
+    "total_rows": 5769
+  },
+  {
+    "year": "114",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:46:27",
+    "files": {
+      "csv": "datas/merged_data/csv/114-income_statement.csv",
+      "json": "datas/merged_data/json/114-income_statement.json"
+    },
+    "total_rows": 5769
+  },
+  {
+    "year": "106",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:38",
+    "files": {
+      "csv": "datas/merged_data/csv/106-income_statement.csv",
+      "json": "datas/merged_data/json/106-income_statement.json"
+    },
+    "total_rows": 6520
+  },
+  {
+    "year": "107",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:38",
+    "files": {
+      "csv": "datas/merged_data/csv/107-income_statement.csv",
+      "json": "datas/merged_data/json/107-income_statement.json"
+    },
+    "total_rows": 6693
+  },
+  {
+    "year": "108",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:38",
+    "files": {
+      "csv": "datas/merged_data/csv/108-income_statement.csv",
+      "json": "datas/merged_data/json/108-income_statement.json"
+    },
+    "total_rows": 6829
+  },
+  {
+    "year": "109",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:38",
+    "files": {
+      "csv": "datas/merged_data/csv/109-income_statement.csv",
+      "json": "datas/merged_data/json/109-income_statement.json"
+    },
+    "total_rows": 6197
+  },
+  {
+    "year": "110",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:39",
+    "files": {
+      "csv": "datas/merged_data/csv/110-income_statement.csv",
+      "json": "datas/merged_data/json/110-income_statement.json"
+    },
+    "total_rows": 7120
+  },
+  {
+    "year": "111",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:39",
+    "files": {
+      "csv": "datas/merged_data/csv/111-income_statement.csv",
+      "json": "datas/merged_data/json/111-income_statement.json"
+    },
+    "total_rows": 7274
+  },
+  {
+    "year": "112",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:39",
+    "files": {
+      "csv": "datas/merged_data/csv/112-income_statement.csv",
+      "json": "datas/merged_data/json/112-income_statement.json"
+    },
+    "total_rows": 7432
+  },
+  {
+    "year": "113",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:40",
+    "files": {
+      "csv": "datas/merged_data/csv/113-income_statement.csv",
+      "json": "datas/merged_data/json/113-income_statement.json"
+    },
+    "total_rows": 7586
+  },
+  {
+    "year": "114",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T02:50:40",
+    "files": {
+      "csv": "datas/merged_data/csv/114-income_statement.csv",
+      "json": "datas/merged_data/json/114-income_statement.json"
+    },
+    "total_rows": 5769
+  },
+  {
+    "year": "106",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:48",
+    "files": {
+      "csv": "datas/merged_data/csv/106-income_statement.csv",
+      "json": "datas/merged_data/json/106-income_statement.json"
+    },
+    "total_rows": 6520
+  },
+  {
+    "year": "107",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:48",
+    "files": {
+      "csv": "datas/merged_data/csv/107-income_statement.csv",
+      "json": "datas/merged_data/json/107-income_statement.json"
+    },
+    "total_rows": 6693
+  },
+  {
+    "year": "108",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:49",
+    "files": {
+      "csv": "datas/merged_data/csv/108-income_statement.csv",
+      "json": "datas/merged_data/json/108-income_statement.json"
+    },
+    "total_rows": 6829
+  },
+  {
+    "year": "109",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:49",
+    "files": {
+      "csv": "datas/merged_data/csv/109-income_statement.csv",
+      "json": "datas/merged_data/json/109-income_statement.json"
+    },
+    "total_rows": 6197
+  },
+  {
+    "year": "110",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:49",
+    "files": {
+      "csv": "datas/merged_data/csv/110-income_statement.csv",
+      "json": "datas/merged_data/json/110-income_statement.json"
+    },
+    "total_rows": 7120
+  },
+  {
+    "year": "111",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:49",
+    "files": {
+      "csv": "datas/merged_data/csv/111-income_statement.csv",
+      "json": "datas/merged_data/json/111-income_statement.json"
+    },
+    "total_rows": 7274
+  },
+  {
+    "year": "112",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:50",
+    "files": {
+      "csv": "datas/merged_data/csv/112-income_statement.csv",
+      "json": "datas/merged_data/json/112-income_statement.json"
+    },
+    "total_rows": 7432
+  },
+  {
+    "year": "113",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:50",
+    "files": {
+      "csv": "datas/merged_data/csv/113-income_statement.csv",
+      "json": "datas/merged_data/json/113-income_statement.json"
+    },
+    "total_rows": 7586
+  },
+  {
+    "year": "114",
+    "report": "income_statement",
+    "timestamp": "2025-12-19T03:04:50",
+    "files": {
+      "csv": "datas/merged_data/csv/114-income_statement.csv",
+      "json": "datas/merged_data/json/114-income_statement.json"
+    },
+    "total_rows": 5769
   }
 ]

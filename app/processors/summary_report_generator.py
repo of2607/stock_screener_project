@@ -99,22 +99,18 @@ class LookupBuilder:
     @staticmethod
     def build_profit_lookup(df: pd.DataFrame) -> Dict:
         """
-        取得年度淨利。由於財報淨利為累計值，直接取 Q4 作為全年淨利。
-        優先使用「本期淨利（淨損）」以符合 GoodInfo 計算標準，若無則回退使用「淨利（損）歸屬於母公司業主」。
+        取得年度淨利。直接從合併資料中的「年度淨利」欄位取得（該欄位已在 merge 時計算）。
         """
         lookup = {}
         for _, row in df.iterrows():
             code = row.get("代號")
             year = row.get("年度")
             quarter = row.get("季別")
-            # 優先使用「本期淨利（淨損）」，符合 GoodInfo 標準
-            profit = safe_float(row.get("本期淨利（淨損）"))
-            # 若無「本期淨利（淨損）」，則使用「淨利（損）歸屬於母公司業主」作為回退
-            if pd.isna(profit):
-                profit = safe_float(row.get("淨利（損）歸屬於母公司業主"))
-            # 只取 Q4（全年累計）作為年度淨利
-            if quarter == "Q4" and not pd.isna(profit):
-                lookup[(code, year)] = profit
+            # 只有 Q4 的年度淨利有值
+            if quarter == "Q4":
+                annual_profit = safe_float(row.get("淨利"))
+                if not pd.isna(annual_profit):
+                    lookup[(code, year)] = annual_profit
         return lookup
 
     @staticmethod
