@@ -21,6 +21,7 @@ DOWNLOAD_REPORTS: List[str] = ['all']  # 處理所有報表類型
 SAVE_FORMAT: List[str] = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
 ENABLE_DOWNLOAD_REPORTS: bool = False # 是否下載報表資料
 ENABLE_MERGE_REPORTS: bool = False # 是否合併報表資料
+ENABLE_PRECOMPUTE_METRICS: bool = True # 是否預計算長表
 ENABLE_SUMMARY_REPORT: bool = True # 是否自動產生彙總報表
 UPLOAD_SUMMARY_REPORT: bool = True # 是否上傳自動產生的彙總報表
 UPLOAD_SUMMARY_REPORT_TARGET: List[str] = ["all"]  # r2, gdrive, supabase
@@ -34,6 +35,13 @@ MERGED_DATA_DIR: str = "datas/merged_data"
 MERGED_CSV_DIR: str = os.path.join(MERGED_DATA_DIR, "csv")
 MERGED_JSON_DIR: str = os.path.join(MERGED_DATA_DIR, "json")
 MERGED_LOG_DIR: str = os.path.join(LOG_DIR_BASE, "log.json")
+
+# =========================
+# 預計算長表相關路徑
+# =========================
+PRECOMPUTED_METRICS_DIR: str = "datas/precomputed_metrics"
+HISTORICAL_METRICS_FILE: str = os.path.join(PRECOMPUTED_METRICS_DIR, "historical_metrics.csv")
+METRICS_UPDATE_LOG_FILE: str = os.path.join(PRECOMPUTED_METRICS_DIR, "update_log.json")
 
 # =========================
 # Summary Report 相關預設路徑

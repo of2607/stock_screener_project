@@ -30,6 +30,12 @@ POST_REPORT_TASKS = [
         "entry": "main"
     },
     {
+        "enable_flag": "ENABLE_PRECOMPUTE_METRICS",
+        "desc": "整合歷史數據到長表",
+        "module": "processors.metrics_precomputer",
+        "entry": "main"
+    },
+    {
         "enable_flag": "ENABLE_SUMMARY_REPORT",
         "desc": "自動產生彙總報表",
         "module": "processors.summary_report_generator",
