@@ -140,8 +140,14 @@ class MetricsPrecomputer:
                 # 去除 NaN 和 0 的股利
                 df.loc[df["cash_dividend"] == 0, "cash_dividend"] = np.nan
                 dfs.append(df[["code", "year", "quarter", "cash_dividend"]])
+        
         if dfs:
-            return pd.concat(dfs, ignore_index=True)
+            result = pd.concat(dfs, ignore_index=True)
+            # 去重：相同 (code, year, quarter) 的股利，取最大值
+            result = result.groupby(["code", "year", "quarter"], as_index=False).agg({
+                "cash_dividend": "max"
+            })
+            return result
         return pd.DataFrame()
 
     def _get_valid_stock_codes(self) -> set:

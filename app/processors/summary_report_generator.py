@@ -18,6 +18,7 @@ from config.settings import (
     SUMMARY_YEARS,
     REPORT_CSV_DIR,
     REPORT_JSON_DIR,
+    HISTORICAL_METRICS_FILE,
 )
 
 DEFAULT_REPORT_CSV = REPORT_CSV_DIR
@@ -29,12 +30,181 @@ DEFAULT_SUMMARY_YEARS = SUMMARY_YEARS
 
 # === 分層設計 ===
 
+class HistoricalMetricsLoader:
+    """從預計算的 historical_metrics.csv 長表讀取數據並轉換為 lookup 字典格式"""
+    
+    def __init__(self, metrics_file: str):
+        self.metrics_file = metrics_file
+    
+    def load_metrics(self) -> pd.DataFrame:
+        """
+        讀取 historical_metrics.csv 長表
+        欄位：code, year, quarter, eps, profit, equity, cash_dividend
+        quarter 值：Q1, Q2, Q3, Q4 (季別) 或 Y1 (年度股利)
+        """
+        try:
+            df = pd.read_csv(self.metrics_file, encoding='utf-8-sig')
+            # 標準化欄位名稱（移除前後空白）
+            df.columns = [col.strip() for col in df.columns]
+            return df
+        except FileNotFoundError:
+            self.logger = Logger(SUMMARY_LOG_DIR) if 'Logger' in locals() else None
+            raise FileNotFoundError(f"historical_metrics.csv 不存在: {self.metrics_file}")
+        except Exception as e:
+            raise RuntimeError(f"讀取 historical_metrics.csv 失敗: {str(e)}")
+    
+    def build_lookups_from_metrics(self, metrics_df: pd.DataFrame) -> Dict[str, Dict]:
+        """
+        將長表轉換為 lookup 字典：
+        - eps_lookup: {(code, year, quarter): eps_value}
+        - profit_lookup: {(code, year): annual_profit}
+        - equity_lookup: {(code, year, quarter): equity_value}
+        - dividend_lookup: {(code, year): cash_dividend}（用於聚合 Y1 重複行）
+        """
+        eps_lookup = {}
+        profit_lookup = {}
+        equity_lookup = {}
+        dividend_lookup = {}  # 聚合年度股利，處理重複的 Y1 行
+        
+        for _, row in metrics_df.iterrows():
+            code = str(row.get("code", "")).strip()
+            year = str(row.get("year", "")).strip()
+            quarter = str(row.get("quarter", "")).strip()
+            
+            if not code or not year or not quarter:
+                continue
+            
+            # EPS lookup（所有季別）
+            eps_val = safe_float(row.get("eps"))
+            if not pd.isna(eps_val):
+                eps_lookup[(code, year, quarter)] = eps_val
+            
+            # 淨利 lookup（年度聚合，只儲存於年度）
+            profit_val = safe_float(row.get("profit"))
+            if not pd.isna(profit_val) and quarter == "Q4":
+                profit_lookup[(code, year)] = profit_val
+            
+            # 權益 lookup（所有季別，只有 Q4 有效）
+            equity_val = safe_float(row.get("equity"))
+            if not pd.isna(equity_val):
+                equity_lookup[(code, year, quarter)] = equity_val
+            
+            # 股利 lookup（去重 Y1 行，處理重複）
+            if quarter == "Y1":  # 年度股利行
+                dividend_val = safe_float(row.get("cash_dividend"))
+                if not pd.isna(dividend_val):
+                    # 若不存在或新值更大，才更新（去重，保留最大值）
+                    if (code, year) not in dividend_lookup or dividend_val > dividend_lookup[(code, year)]:
+                        dividend_lookup[(code, year)] = dividend_val
+        
+        return {
+            "eps_lookup": eps_lookup,
+            "profit_lookup": profit_lookup,
+            "equity_lookup": equity_lookup,
+            "dividend_lookup": dividend_lookup,
+        }
+
+
 class DataLoader:
-    def __init__(self, data_dir: str, price_file: str):
+    def __init__(self, data_dir: str, price_file: str, use_precomputed: bool = True):
         self.data_dir = data_dir
         self.price_file = price_file
+        self.use_precomputed = use_precomputed
+        self.metrics_loader = HistoricalMetricsLoader(HISTORICAL_METRICS_FILE) if use_precomputed else None
 
     def load(self, years: List[str]) -> Dict[str, pd.DataFrame]:
+        """
+        載入數據。若 use_precomputed=True，優先使用 historical_metrics；否則回退至原始方式
+        """
+        if self.use_precomputed and self.metrics_loader:
+            return self._load_from_precomputed(years)
+        else:
+            return self._load_from_original(years)
+    
+    def _load_from_precomputed(self, years: List[str]) -> Dict[str, pd.DataFrame]:
+        """從 historical_metrics.csv 讀取預計算數據"""
+        # 為了計算 ROE（需要前一年 Q4），自動加入最早年份的前一年
+        extended_years = years.copy()
+        if years:
+            earliest_year = min([int(y) for y in years])
+            prev_year = str(earliest_year - 1)
+            if prev_year not in extended_years:
+                extended_years.append(prev_year)
+        
+        # 讀取長表並轉換為 lookup
+        metrics_df = self.metrics_loader.load_metrics()
+        
+        # 從長表構建 eps, profit, equity 的 lookup
+        lookups = self.metrics_loader.build_lookups_from_metrics(metrics_df)
+        
+        # 從長表構建 eps_df, bs_df, div_df（用於後續相容性）
+        # 注意：這些 DataFrame 主要是為了保持與原有代碼的相容性
+        eps_df = self._build_eps_df_from_metrics(metrics_df, extended_years)
+        bs_df = self._build_bs_df_from_metrics(metrics_df, extended_years)
+        div_df = self._build_div_df_from_metrics(metrics_df, years)
+        
+        return {
+            "eps_df": eps_df,
+            "div_df": div_df,
+            "bs_df": bs_df,
+            "price_map": self._get_latest_price_map(),
+            "lookups": lookups,  # 新增直接返回 lookups，優化性能
+        }
+    
+    def _build_eps_df_from_metrics(self, metrics_df: pd.DataFrame, years: List[str]) -> pd.DataFrame:
+        """從長表構建 eps_df（包含 EPS 和淨利資訊）"""
+        df = metrics_df[metrics_df["year"].astype(str).isin(years)].copy()
+        df = df[df["quarter"].isin(["Q1", "Q2", "Q3", "Q4"])].copy()
+        
+        # 重新命名欄位以符合原有格式
+        df = df.rename(columns={
+            "code": "代號",
+            "year": "年度",
+            "quarter": "季別",
+            "eps": "基本每股盈餘（元）",
+            "profit": "淨利",
+        })
+        
+        return df[["代號", "年度", "季別", "基本每股盈餘（元）", "淨利"]].copy()
+    
+    def _build_bs_df_from_metrics(self, metrics_df: pd.DataFrame, years: List[str]) -> pd.DataFrame:
+        """從長表構建 bs_df（包含權益資訊）"""
+        df = metrics_df[metrics_df["year"].astype(str).isin(years)].copy()
+        df = df[df["quarter"].isin(["Q1", "Q2", "Q3", "Q4"])].copy()
+        
+        # 重新命名欄位以符合原有格式
+        df = df.rename(columns={
+            "code": "代號",
+            "year": "年度",
+            "quarter": "季別",
+            "equity": "權益總計",
+        })
+        
+        return df[["代號", "年度", "季別", "權益總計"]].copy()
+    
+    def _build_div_df_from_metrics(self, metrics_df: pd.DataFrame, years: List[str]) -> pd.DataFrame:
+        """從長表構建 div_df（包含現金股利資訊）"""
+        # 篩選 Y1 行（年度股利）
+        df = metrics_df[metrics_df["year"].astype(str).isin(years)].copy()
+        df = df[df["quarter"] == "Y1"].copy()
+        
+        # 去重相同 (code, year) 的股利，取最大值
+        df = df.groupby(["code", "year"], as_index=False).agg({
+            "cash_dividend": "max"
+        })
+        
+        # 重新命名欄位以符合原有格式
+        df = df.rename(columns={
+            "code": "代號",
+            "year": "年度",
+            "cash_dividend": "現金股利",
+        })
+        df["季別"] = "Y1"  # 新增季別欄位
+        
+        return df[["代號", "年度", "季別", "現金股利"]].copy()
+
+    def _load_from_original(self, years: List[str]) -> Dict[str, pd.DataFrame]:
+        """原有的數據載入方式（備選路徑）"""
         # 為了計算 ROE（需要前一年 Q4 作為期初），自動加入最早年份的前一年
         extended_years = years.copy()
         if years:
@@ -49,6 +219,7 @@ class DataLoader:
             "bs_df": self._collect_yearly_data("balance_sheet", extended_years),  # 資產負債需要前一年 Q4
             "price_map": self._get_latest_price_map(),
         }
+
 
     def _read_csv_with_nan(self, path: str) -> pd.DataFrame:
         try:
@@ -74,6 +245,20 @@ class DataLoader:
             return dict(zip(df[code_col], zip(df[price_col], df[date_col])))
         else:
             return dict(zip(df[code_col], zip(df[price_col], [None]*len(df))))
+
+    def _get_stock_names_from_price_file(self) -> Dict[str, str]:
+        """從 latest_stock_prices.csv 中提取股票名稱對照表"""
+        df = self._read_csv_with_nan(self.price_file)
+        if hasattr(df, 'columns'):
+            df.columns = [str(col).strip().replace('\ufeff', '') for col in df.columns]
+        # 兼容不同欄位名稱
+        code_col = "stock_code" if "stock_code" in df.columns else "代號"
+        name_col = "stock_name" if "stock_name" in df.columns else "名稱" if "名稱" in df.columns else None
+        
+        if not name_col or name_col not in df.columns:
+            return {}
+        
+        return dict(zip(df[code_col], df[name_col]))
 
     def _collect_yearly_data(self, report: str, years: List[str]) -> pd.DataFrame:
         dfs = []
@@ -181,9 +366,17 @@ class MetricCalculator:
         except Exception:
             return np.nan
 
-    def calculate(self, lookups: Dict[str, Dict], data: Dict[str, pd.DataFrame], years: List[str]) -> List[Dict]:
+    def calculate(self, lookups: Dict[str, Dict], data: Dict[str, pd.DataFrame], years: List[str], stock_names: Dict[str, str] = None) -> List[Dict]:
         eps_df, div_df, bs_df, price_map = data["eps_df"], data["div_df"], data["bs_df"], data["price_map"]
         eps_lookup, profit_lookup, equity_lookup = lookups["eps_lookup"], lookups["profit_lookup"], lookups["equity_lookup"]
+        
+        # 優化：若有預計算的 lookups，直接使用
+        dividend_lookup = lookups.get("dividend_lookup", {})
+        use_precomputed = bool(dividend_lookup)
+        
+        # 若未提供 stock_names，初始化為空字典
+        if stock_names is None:
+            stock_names = {}
 
         # 欄位名稱自動對應與安全取得
 
@@ -215,7 +408,10 @@ class MetricCalculator:
             get_col_vals(div_df, code_col),
             get_col_vals(bs_df, code_col)
         ]).dropna().unique()
-        all_names = get_name_map(eps_df, div_df, bs_df, code_col, name_col)
+        
+        # 股票名稱優先使用傳入的 stock_names，回退至報表數據
+        if not stock_names:
+            stock_names = get_name_map(eps_df, div_df, bs_df, code_col, name_col)
 
         report_rows = []
         # 預先快取 lookup，減少重複查詢
@@ -223,12 +419,21 @@ class MetricCalculator:
         profit_lookup_cache = profit_lookup
         equity_lookup_cache = equity_lookup
         price_map_cache = price_map
+        dividend_lookup_cache = dividend_lookup
+        
         def avg_last_n(lst, n):
             vals = [v for v in lst[:n] if not pd.isna(v)]
             return round(np.mean(vals), 2) if vals else np.nan
 
-        def get_cash_div_sum(div_df, code, year, code_col, year_col, cash_div_col):
-            """取得年度現金股利加總，去重且型別安全"""
+        def get_cash_div_sum(div_df, code, year, code_col, year_col, cash_div_col, use_precomputed=False):
+            """
+            取得年度現金股利加總。
+            若 use_precomputed=True，直接從預計算的 dividend_lookup 取得；
+            否則從 div_df 計算聚合。
+            """
+            if use_precomputed:
+                return dividend_lookup_cache.get((code, year), np.nan)
+            
             if not all(col in div_df.columns for col in [code_col, year_col, cash_div_col]):
                 return np.nan
             div_rows = div_df[(div_df[code_col] == code) & (div_df[year_col] == year)].copy()
@@ -239,7 +444,7 @@ class MetricCalculator:
             return round(valid_divs[cash_div_col].sum(), 2) if not valid_divs.empty else np.nan
 
         for code in all_codes:
-            name = all_names.get(code, "")
+            name = stock_names.get(code, "")
             row = {"股票代號": code, "股票名稱": name}
             price, close_date = price_map_cache.get(code, (np.nan, None))
             price = safe_float(price)
@@ -252,7 +457,7 @@ class MetricCalculator:
                 curr = eps_lookup_cache.get((code, y, "Q4"), np.nan)
                 row[f"{y}EPS_年度"] = curr
                 eps_years.append(curr)
-                cash_div = get_cash_div_sum(div_df, code, y, code_col, year_col, cash_div_col)
+                cash_div = get_cash_div_sum(div_df, code, y, code_col, year_col, cash_div_col, use_precomputed=use_precomputed)
                 row[f"{y}現金股利"] = cash_div
                 div_years.append(cash_div)
                 div_yield = round(float(cash_div) / float(price) * 100, 2) if not pd.isna(cash_div) and not pd.isna(price) and price != 0 else np.nan
@@ -396,7 +601,7 @@ class SummaryReportGenerator:
         self.price_file = price_file
         self.quarters = quarters or DEFAULT_QUARTERS
 
-        self.data_loader = DataLoader(self.data_dir, self.price_file)
+        self.data_loader = DataLoader(self.data_dir, self.price_file, use_precomputed=True)
         self.metric_calculator = MetricCalculator(self.quarters)
         self.lookup_builder = LookupBuilder()
         self.report_assembler = ReportAssembler()
@@ -409,12 +614,21 @@ class SummaryReportGenerator:
         output_json: str,
     ) -> None:
         data = self.data_loader.load(years)
-        lookups = {
-            "eps_lookup": self.lookup_builder.build_eps_lookup(data["eps_df"]),
-            "profit_lookup": self.lookup_builder.build_profit_lookup(data["eps_df"]),
-            "equity_lookup": self.lookup_builder.build_equity_lookup(data["bs_df"]),
-        }
-        metrics = self.metric_calculator.calculate(lookups, data, years)
+        
+        # 優化：若預計算 lookups 已返回，直接使用；否則從 DataFrame 構建
+        if "lookups" in data and data["lookups"]:
+            lookups = data["lookups"]
+        else:
+            lookups = {
+                "eps_lookup": self.lookup_builder.build_eps_lookup(data["eps_df"]),
+                "profit_lookup": self.lookup_builder.build_profit_lookup(data["eps_df"]),
+                "equity_lookup": self.lookup_builder.build_equity_lookup(data["bs_df"]),
+            }
+        
+        # 準備股票名稱對照表（優先從 latest_stock_prices.csv 取得）
+        stock_names = self.data_loader._get_stock_names_from_price_file()
+        
+        metrics = self.metric_calculator.calculate(lookups, data, years, stock_names)
         df_report = self.report_assembler.assemble(metrics)
         self.report_exporter.export(
             df_report,
