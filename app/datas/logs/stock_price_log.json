@@ -58,5 +58,35 @@
       "json": "datas/merged_data/json/latest_stock_prices.json"
     },
     "total_rows": 27382
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-19T04:53:38",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 27382
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-19T04:56:09",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 27382
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2025-12-20T00:51:22",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 27701
   }
 ]

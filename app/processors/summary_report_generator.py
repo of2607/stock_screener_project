@@ -59,12 +59,12 @@ class HistoricalMetricsLoader:
         - eps_lookup: {(code, year, quarter): eps_value}
         - profit_lookup: {(code, year): annual_profit}
         - equity_lookup: {(code, year, quarter): equity_value}
-        - dividend_lookup: {(code, year): cash_dividend}（用於聚合 Y1 重複行）
+        - dividend_lookup: {(code, year): cash_dividend}（計算年度股利加總）
         """
         eps_lookup = {}
         profit_lookup = {}
         equity_lookup = {}
-        dividend_lookup = {}  # 聚合年度股利，處理重複的 Y1 行
+        dividend_lookup = {}  # 計算年度股利（所有季度/半年股利加總）
         
         for _, row in metrics_df.iterrows():
             code = str(row.get("code", "")).strip()
@@ -89,13 +89,11 @@ class HistoricalMetricsLoader:
             if not pd.isna(equity_val):
                 equity_lookup[(code, year, quarter)] = equity_val
             
-            # 股利 lookup（去重 Y1 行，處理重複）
-            if quarter == "Y1":  # 年度股利行
-                dividend_val = safe_float(row.get("cash_dividend"))
-                if not pd.isna(dividend_val):
-                    # 若不存在或新值更大，才更新（去重，保留最大值）
-                    if (code, year) not in dividend_lookup or dividend_val > dividend_lookup[(code, year)]:
-                        dividend_lookup[(code, year)] = dividend_val
+            # 股利 lookup：計算年度股利（所有季度/半年股利累加，包括 Y1）
+            dividend_val = safe_float(row.get("cash_dividend"))
+            if not pd.isna(dividend_val):
+                # 累加同一 (code, year) 的股利
+                dividend_lookup[(code, year)] = dividend_lookup.get((code, year), 0) + dividend_val
         
         return {
             "eps_lookup": eps_lookup,
@@ -183,14 +181,13 @@ class DataLoader:
         return df[["代號", "年度", "季別", "權益總計"]].copy()
     
     def _build_div_df_from_metrics(self, metrics_df: pd.DataFrame, years: List[str]) -> pd.DataFrame:
-        """從長表構建 div_df（包含現金股利資訊）"""
-        # 篩選 Y1 行（年度股利）
+        """從長表構建 div_df（包含現金股利資訊，計算年度股利）"""
+        # 篩選指定年份的所有股利資料（Q1, Q2, Q3, Q4, H1, H2, Y1 等）
         df = metrics_df[metrics_df["year"].astype(str).isin(years)].copy()
-        df = df[df["quarter"] == "Y1"].copy()
         
-        # 去重相同 (code, year) 的股利，取最大值
+        # 按 (code, year) 分組，將所有季度/半年股利加總為年度股利
         df = df.groupby(["code", "year"], as_index=False).agg({
-            "cash_dividend": "max"
+            "cash_dividend": "sum"
         })
         
         # 重新命名欄位以符合原有格式
@@ -199,7 +196,7 @@ class DataLoader:
             "year": "年度",
             "cash_dividend": "現金股利",
         })
-        df["季別"] = "Y1"  # 新增季別欄位
+        df["季別"] = "Y1"  # 新增季別欄位為 Y1
         
         return df[["代號", "年度", "季別", "現金股利"]].copy()
 
