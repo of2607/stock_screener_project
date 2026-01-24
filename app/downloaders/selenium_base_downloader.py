@@ -68,6 +68,7 @@ class SeleniumBaseDownloader(BaseDownloader):
             "profile.password_manager_enabled": False,
             "profile.default_content_setting_values.notifications": 2,
             "profile.default_content_settings.popups": 0,
+            "profile.default_content_settings.automatic_downloads": 1,  # 允許多檔案下載
             "autofill.profile_enabled": False,
             "autofill.credit_card_enabled": False,
             "password_manager_enabled": False,

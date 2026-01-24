@@ -54,34 +54,77 @@ class YingZaiBiaoFetcher:
         """
         self.logger.info("🚀 開始抓取盈再表資料...")
         
+        tw_success = False
+        us_success = False
+        
         try:
-            # 1. 下載資料
+            # ========================================
+            # 步驟 1: 下載台股和美股資料
+            # ========================================
             self.logger.info("=" * 50)
-            self.logger.info("步驟 1: 下載 twlist.xlsx")
+            self.logger.info("步驟 1: 下載 twlist.xlsx 和 uslist.xlsx")
             self.logger.info("=" * 50)
             
-            success, file_path = self.downloader.download_and_save()
+            success, _ = self.downloader.download_and_save()
             
-            if not success or not file_path:
+            if not success:
                 self.logger.error("盈再表資料下載失敗")
                 return False
             
-            # 2. 處理資料
+            # ========================================
+            # 步驟 2: 處理台股資料
+            # ========================================
             self.logger.info("=" * 50)
-            self.logger.info("步驟 2: 處理並轉換資料")
-            self.logger.info("=" * 50)
-            
-            success = self.processor.process_and_save()
-            
-            if not success:
-                self.logger.error("盈再表資料處理失敗")
-                return False
-            
-            self.logger.info("=" * 50)
-            self.logger.success("✅ 盈再表資料抓取完成")
+            self.logger.info("步驟 2: 處理台股資料")
             self.logger.info("=" * 50)
             
-            return True
+            try:
+                tw_success = self.processor.process_and_save()
+                
+                if not tw_success:
+                    self.logger.error("台股盈再表資料處理失敗")
+                else:
+                    self.logger.success("✅ 台股盈再表資料處理完成")
+                    
+            except Exception as e:
+                self.logger.error(f"處理台股資料時發生錯誤: {e}")
+                import traceback
+                self.logger.debug(traceback.format_exc())
+            
+            # ========================================
+            # 步驟 3: 處理美股資料
+            # ========================================
+            self.logger.info("=" * 50)
+            self.logger.info("步驟 3: 處理美股資料")
+            self.logger.info("=" * 50)
+            
+            try:
+                us_success = self.processor.process_us_and_save()
+                
+                if not us_success:
+                    self.logger.error("美股盈再表資料處理失敗")
+                else:
+                    self.logger.success("✅ 美股盈再表資料處理完成")
+                    
+            except Exception as e:
+                self.logger.error(f"處理美股資料時發生錯誤: {e}")
+                import traceback
+                self.logger.debug(traceback.format_exc())
+            
+            # ========================================
+            # 總結
+            # ========================================
+            self.logger.info("=" * 50)
+            if tw_success and us_success:
+                self.logger.success("✅ 盈再表資料抓取完成 (台股 + 美股)")
+            elif tw_success or us_success:
+                self.logger.warning(f"⚠️ 部分完成 (台股: {'✓' if tw_success else '✗'}, 美股: {'✓' if us_success else '✗'})")
+            else:
+                self.logger.error("❌ 盈再表資料抓取失敗")
+            self.logger.info("=" * 50)
+            
+            # 只要有一個市場成功就視為成功
+            return tw_success or us_success
             
         except Exception as e:
             self.logger.error(f"抓取盈再表資料時發生錯誤: {e}")

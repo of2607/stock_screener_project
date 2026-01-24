@@ -153,6 +153,30 @@ NUMERIC_COLUMNS: Dict[str, List[str]] = {
         "近12月最高價",
         "近12月最低價",
         # 盈再表資料 - 數值欄位（待確認後再優化）
+    ],
+    'yingzaibiao_us': [
+        # 美股盈再表 - 與台股相同的欄位結構（待確認後調整）
+        "收盤價",
+        "預期報酬率",
+        "貴價",
+        "淑價",
+        "預期ROE",
+        "NAV",
+        "預期常利",
+        "盈再率",
+        "預期配息率",
+        "股息",
+        "股子",
+        "ROE1",
+        "ROE2",
+        "ROE3",
+        "ROE4",
+        "ROE5",
+        "Shares",
+        "最近營收年度",
+        "營收",
+        "近12月最高價",
+        "近12月最低價",
     ]
 }
 
@@ -160,7 +184,8 @@ NUMERIC_COLUMNS: Dict[str, List[str]] = {
 # 文字欄位設定（需要強制以文字格式儲存的欄位）
 # =========================
 TEXT_COLUMNS: Dict[str, List[str]] = {
-    'yingzaibiao': ['Symbol']  # Symbol 必須以文字格式儲存
+    'yingzaibiao': ['Symbol'],  # Symbol 必須以文字格式儲存
+    'yingzaibiao_us': ['Symbol']  # 美股 Symbol 也必須以文字格式儲存
 }
 
 # =========================

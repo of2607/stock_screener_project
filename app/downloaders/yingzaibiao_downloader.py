@@ -172,24 +172,22 @@ class YingZaiBiaoDownloader(SeleniumBaseDownloader):
             self.logger.error(f"登入過程發生錯誤: {e}")
             return False
     
-    def _trigger_download(self) -> bool:
+    def _download_market_data(self, button_id: str, filename: str) -> Tuple[bool, Optional[Path]]:
         """
-        觸發下載動作（點擊下載按鈕）
+        下載指定市場的資料
         
+        Args:
+            button_id: 下載按鈕的 ID
+            filename: 目標檔案名稱 (例如: twlist.xlsx 或 uslist.xlsx)
+            
         Returns:
-            下載是否成功觸發
+            (是否成功, 最終檔案路徑)
         """
         try:
-            # 等待一段時間讓用戶手動關閉Chrome密碼彈窗（如果出現）
-            self.logger.warning("⚠️ 如果出現Chrome密碼警告彈窗，請手動關閉...")
-            self.logger.info("等待10秒讓你關閉彈窗...")
-            time.sleep(10)
-            
-            self.logger.progress("尋找下載按鈕...")
-            
             # 等待下載按鈕可點擊
+            self.logger.progress(f"尋找下載按鈕 ({button_id})...")
             download_button = self.wait.until(
-                EC.element_to_be_clickable((By.ID, "ctl00_ContentPlaceHolder1_Linkbutton1"))
+                EC.element_to_be_clickable((By.ID, button_id))
             )
             
             # 先移除可能遮擋的 iframe（廣告）
@@ -209,54 +207,27 @@ class YingZaiBiaoDownloader(SeleniumBaseDownloader):
             time.sleep(0.5)
             
             # 使用 JavaScript 點擊（避免被遮擋）
-            self.logger.debug("點擊下載按鈕...")
+            self.logger.debug(f"點擊下載按鈕 ({button_id})...")
             self.driver.execute_script("arguments[0].click();", download_button)
             self.logger.success("已觸發下載")
             
-            return True
+            # 等待下載完成
+            self.logger.info("等待下載完成...")
+            downloaded_file = self._wait_for_download_complete(timeout=60)
             
-        except TimeoutException:
-            self.logger.error("找不到下載按鈕或按鈕無法點擊")
-            return False
-        except Exception as e:
-            self.logger.error(f"觸發下載時發生錯誤: {e}")
-            return False
-    
-    def download_and_save(self) -> Tuple[bool, Optional[Path]]:
-        """
-        下載 twlist.xlsx 並儲存到指定位置
-        
-        Returns:
-            (是否成功, 最終檔案路徑)
-        """
-        self.logger.info("🚀 開始下載盈再表資料...")
-        
-        # 執行下載
-        success, downloaded_file = self.download_data()
-        
-        if not success or not downloaded_file:
-            self.logger.error("下載失敗")
-            return False, None
-        
-        # 移動檔案到最終位置（覆蓋舊檔）
-        try:
+            if not downloaded_file:
+                self.logger.error("下載超時或失敗")
+                return False, None
+            
+            # 移動檔案到最終位置
             final_dir = Path(YINGZAIBIAO_RAW_DIR)
             final_dir.mkdir(parents=True, exist_ok=True)
-            
-            final_path = final_dir / "twlist.xlsx"
+            final_path = final_dir / filename
             
             # 檢查下載文件是否存在
             if not downloaded_file.exists():
                 self.logger.error(f"下載的檔案不存在: {downloaded_file}")
-                self.logger.info(f"嘗試在下載目錄中搜索: {self.download_dir}")
-                # 搜索所有可能的文件
-                all_files = list(self.download_dir.rglob('*'))
-                self.logger.info(f"找到的檔案: {[f.name for f in all_files if f.is_file()]}")
                 return False, None
-            
-            # 如果檔名不是 twlist.xlsx，重新命名
-            if downloaded_file.name != "twlist.xlsx":
-                self.logger.warning(f"下載的檔名是 {downloaded_file.name}，將重新命名為 twlist.xlsx")
             
             # 移動並覆蓋
             if final_path.exists():
@@ -266,13 +237,115 @@ class YingZaiBiaoDownloader(SeleniumBaseDownloader):
             downloaded_file.rename(final_path)
             self.logger.success(f"檔案已儲存: {final_path}")
             
-            # 清理 temp 目錄的其他檔案
+            return True, final_path
+            
+        except TimeoutException:
+            self.logger.error(f"找不到下載按鈕或按鈕無法點擊: {button_id}")
+            return False, None
+        except Exception as e:
+            self.logger.error(f"下載時發生錯誤: {e}")
+            return False, None
+    
+    def download_and_save(self) -> Tuple[bool, Optional[Path]]:
+        """
+        下載 twlist.xlsx 和 uslist.xlsx 並儲存到指定位置
+        
+        Returns:
+            (是否成功, 最終檔案路徑)
+        """
+        self.logger.info("🚀 開始下載盈再表資料...")
+        
+        # 初始化瀏覽器 driver
+        try:
+            self._init_driver()
+        except Exception as e:
+            self.logger.error(f"初始化瀏覽器失敗: {e}")
+            return False, None
+        
+        # 執行登入
+        if not self._perform_login():
+            self.logger.error("登入失敗")
+            self._close_driver()
+            return False, None
+        
+        # 等待一段時間讓用戶手動關閉Chrome密碼彈窗（如果出現）
+        self.logger.warning("⚠️ 如果出現Chrome密碼警告彈窗，請手動關閉...")
+        self.logger.info("等待10秒讓你關閉彈窗...")
+        time.sleep(10)
+        
+        tw_success = False
+        us_success = False
+        
+        # 下載台股資料
+        try:
+            self.logger.info("=" * 50)
+            self.logger.info("下載台股資料 (twlist.xlsx)")
+            self.logger.info("=" * 50)
+            
+            tw_success, tw_path = self._download_market_data(
+                "ctl00_ContentPlaceHolder1_Linkbutton1", 
+                "twlist.xlsx"
+            )
+            
+            if not tw_success:
+                self.logger.error("台股資料下載失敗")
+            
+            # 清理 temp 目錄的檔案
             for temp_file in self.download_dir.glob('*'):
                 if temp_file.is_file():
                     temp_file.unlink()
-            
-            return True, final_path
-            
+                    
         except Exception as e:
-            self.logger.error(f"移動檔案時發生錯誤: {e}")
+            self.logger.error(f"下載台股資料時發生錯誤: {e}")
+        
+        # 等待3秒確保檔案系統穩定
+        self.logger.info("等待3秒後下載美股資料...")
+        time.sleep(3)
+        
+        # 授予自動下載權限（避免 Chrome 詢問）
+        try:
+            self.logger.debug("設定自動下載權限...")
+            self.driver.execute_cdp_cmd('Browser.setDownloadBehavior', {
+                'behavior': 'allow',
+                'downloadPath': str(self.download_dir.absolute())
+            })
+            self.logger.debug("已設定允許自動下載")
+        except Exception as e:
+            self.logger.warning(f"設定下載權限時發生錯誤: {e}")
+        
+        # 下載美股資料
+        try:
+            self.logger.info("=" * 50)
+            self.logger.info("下載美股資料 (uslist.xlsx)")
+            self.logger.info("=" * 50)
+            
+            us_success, us_path = self._download_market_data(
+                "ctl00_ContentPlaceHolder1_Export", 
+                "uslist.xlsx"
+            )
+            
+            if not us_success:
+                self.logger.error("美股資料下載失敗")
+            
+            # 清理 temp 目錄的檔案
+            for temp_file in self.download_dir.glob('*'):
+                if temp_file.is_file():
+                    temp_file.unlink()
+                    
+        except Exception as e:
+            self.logger.error(f"下載美股資料時發生錯誤: {e}")
+        
+        # 等待一段時間確保所有下載完全完成
+        self.logger.info("等待5秒確保所有下載完全完成...")
+        time.sleep(5)
+        
+        # 清理 driver
+        self._close_driver()
+        
+        # 返回結果
+        if tw_success or us_success:
+            self.logger.success(f"下載完成 (台股: {'✓' if tw_success else '✗'}, 美股: {'✓' if us_success else '✗'})")
+            return True, None
+        else:
+            self.logger.error("台股和美股資料都下載失敗")
             return False, None
