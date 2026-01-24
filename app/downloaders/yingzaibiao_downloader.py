@@ -246,6 +246,19 @@ class YingZaiBiaoDownloader(SeleniumBaseDownloader):
             self.logger.error(f"下載時發生錯誤: {e}")
             return False, None
     
+    def _trigger_download(self) -> bool:
+        """
+        觸發下載動作（實作基類要求的抽象方法）
+        
+        此類使用 download_and_save() 方法處理完整下載流程，
+        此方法僅為滿足基類抽象方法要求而存在。
+        
+        Returns:
+            下載是否成功觸發
+        """
+        self.logger.warning("_trigger_download() 不應被直接調用，請使用 download_and_save()")
+        return True
+    
     def download_and_save(self) -> Tuple[bool, Optional[Path]]:
         """
         下載 twlist.xlsx 和 uslist.xlsx 並儲存到指定位置
