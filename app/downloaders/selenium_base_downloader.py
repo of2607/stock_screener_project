@@ -19,12 +19,18 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import WebDriverException
+
 try:
     import undetected_chromedriver as uc
     HAS_UC = True
 except ImportError:
     HAS_UC = False
+
+try:
     from webdriver_manager.chrome import ChromeDriverManager
+    HAS_WEBDRIVER_MANAGER = True
+except ImportError:
+    HAS_WEBDRIVER_MANAGER = False
 
 from .base_downloader import BaseDownloader
 from config.settings import LOG_DIR_BASE
@@ -131,8 +137,14 @@ class SeleniumBaseDownloader(BaseDownloader):
                 chrome_options.add_argument('--ignore-certificate-errors')
                 chrome_options.add_argument('--ignore-ssl-errors')
                 
-                service = Service(ChromeDriverManager().install())
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                # 使用 webdriver-manager 自動管理 ChromeDriver
+                if HAS_WEBDRIVER_MANAGER:
+                    service = Service(ChromeDriverManager().install())
+                    self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                else:
+                    # 假設系統已安裝 chromedriver
+                    self.driver = webdriver.Chrome(options=chrome_options)
+                
                 self.logger.info("使用標準 Chrome WebDriver")
             
             self.wait = WebDriverWait(self.driver, 10)
