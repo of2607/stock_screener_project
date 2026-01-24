@@ -23,6 +23,9 @@ ENABLE_DOWNLOAD_REPORTS: bool = False # 是否下載報表資料
 ENABLE_MERGE_REPORTS: bool = False # 是否合併報表資料
 ENABLE_PRECOMPUTE_METRICS: bool = False # 是否預計算長表
 ENABLE_SUMMARY_REPORT: bool = True # 是否自動產生彙總報表
+ENABLE_YINGZAIBIAO_DOWNLOAD: bool = True # 是否下載盈再表資料
+UPLOAD_YINGZAIBIAO: bool = True # 是否上傳盈再表資料
+UPLOAD_YINGZAIBIAO_TARGET: List[str] = ["all"]  # r2, gdrive, supabase（預設使用與彙總報表相同的設定）
 UPLOAD_SUMMARY_REPORT: bool = True # 是否上傳自動產生的彙總報表
 UPLOAD_SUMMARY_REPORT_TARGET: List[str] = ["all"]  # r2, gdrive, supabase
 
@@ -90,6 +93,18 @@ STOCK_MIN_PRICE: float = 0  # 最小股價門檻
 
 # 原始資料保留天數
 RAW_DATA_RETENTION_DAYS: int = 7  # 保留7天的原始資料
+
+# =========================
+# 盈再表相關設定
+# =========================
+YINGZAIBIAO_LOGIN_URL: str = "https://stocks.ddns.net/Login.aspx"  # 盈再表登入網址
+YINGZAIBIAO_URL: str = "https://stocks.ddns.net/App/DownloadList.aspx"  # 盈再表下載網址
+YINGZAIBIAO_RAW_DIR: str = os.path.join(RAW_DATA_DIR, "yingzaibiao")  # 原始檔案目錄
+YINGZAIBIAO_DOWNLOAD_DIR: str = os.path.join(YINGZAIBIAO_RAW_DIR, "temp")  # 下載暫存目錄
+YINGZAIBIAO_COOKIES_PATH: str = os.path.join(YINGZAIBIAO_RAW_DIR, ".cookies")  # Cookies 檔案路徑
+YINGZAIBIAO_EXCEL_PATH: str = os.path.join(YINGZAIBIAO_RAW_DIR, "twlist.xlsx")  # Excel 檔案路徑
+YINGZAIBIAO_CSV_PATH: str = os.path.join(MERGED_CSV_DIR, "latest_yingzaibiao.csv")  # CSV 輸出路徑
+YINGZAIBIAO_JSON_PATH: str = os.path.join(MERGED_JSON_DIR, "latest_yingzaibiao.json")  # JSON 輸出路徑
 
 # =========================
 # 自動建立必要目錄

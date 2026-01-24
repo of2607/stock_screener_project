@@ -129,6 +129,9 @@ NUMERIC_COLUMNS: Dict[str, List[str]] = {
     'etf_dividend': [
         '配息',
         '公告年度'
+    ],
+    'yingzaibiao': [
+        # 盈再表資料 - 數值欄位（待確認後再優化）
     ]
 }
 

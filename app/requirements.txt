@@ -4,10 +4,16 @@
 # 核心資料處理套件
 pandas>=2.0.0
 requests>=2.28.0
+openpyxl>=3.1.0
 
 # 網頁解析套件
 beautifulsoup4>=4.11.0
 lxml>=4.9.0
+
+# Selenium 自動化瀏覽器
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+undetected-chromedriver>=3.5.0
 
 # 進度條顯示
 tqdm>=4.64.0

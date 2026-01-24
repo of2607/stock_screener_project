@@ -31,7 +31,11 @@ jobs:
 
       - name: Run summary report
         run: |
-          python main.py --ENABLE_DOWNLOAD_REPORTS=False --ENABLE_MERGE_REPORTS=False --ENABLE_SUMMARY_REPORT=True --UPLOAD_SUMMARY_REPORT=True
+          python main.py --ENABLE_YINGZAIBIAO_DOWNLOAD=True --UPLOAD_YINGZAIBIAO=True --ENABLE_DOWNLOAD_REPORTS=False --ENABLE_MERGE_REPORTS=False --ENABLE_SUMMARY_REPORT=True --UPLOAD_SUMMARY_REPORT=True
+        env:
+          YINGZAIBIAO_USERNAME: ${{ secrets.YINGZAIBIAO_USERNAME }}
+          YINGZAIBIAO_PASSWORD: ${{ secrets.YINGZAIBIAO_PASSWORD }}
+          YINGZAIBIAO_COOKIES: ${{ secrets.YINGZAIBIAO_COOKIES }}
 
       - name: Commit and push changes
         run: |

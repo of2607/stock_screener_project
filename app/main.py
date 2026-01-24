@@ -18,6 +18,18 @@ if current_dir not in sys.path:
 # 可擴充的主流程與後置報表產生任務（統一管理）
 POST_REPORT_TASKS = [
     {
+        "enable_flag": "ENABLE_YINGZAIBIAO_DOWNLOAD",
+        "desc": "下載盈再表資料",
+        "module": "processors.fetch_yingzaibiao",
+        "entry": "main"
+    },
+    {
+        "enable_flag": "UPLOAD_YINGZAIBIAO",
+        "desc": "上傳盈再表資料",
+        "module": "processors.yingzaibiao_upload",
+        "entry": "main"
+    },
+    {
         "enable_flag": None,  # 主流程永遠執行
         "desc": "主資料處理流程",
         "module": "processors.twse_data_processor",  # 直接呼叫 main()
