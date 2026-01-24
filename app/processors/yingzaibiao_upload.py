@@ -24,6 +24,8 @@ def main():
     config = {
         "gdrive_as_url": getattr(settings, "GDRIVE_AS_URL", None),
         "gdrive_folder_id": getattr(settings, "GDRIVE_FOLDER_ID", None),
+        "gdrive_auto_convert_to_sheets": getattr(settings, "GDRIVE_AUTO_CONVERT_TO_SHEETS", True),
+        "gdrive_keep_csv_backup": getattr(settings, "GDRIVE_KEEP_CSV_BACKUP", True),
         "supabase_url": getattr(settings, "SUPABASE_URL", None),
         "supabase_key": getattr(settings, "SUPABASE_KEY", None),
         "supabase_bucket": getattr(settings, "SUPABASE_BUCKET", None),

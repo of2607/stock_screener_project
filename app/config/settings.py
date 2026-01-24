@@ -25,7 +25,7 @@ ENABLE_PRECOMPUTE_METRICS: bool = False # 是否預計算長表
 ENABLE_SUMMARY_REPORT: bool = True # 是否自動產生彙總報表
 ENABLE_YINGZAIBIAO_DOWNLOAD: bool = True # 是否下載盈再表資料
 UPLOAD_YINGZAIBIAO: bool = True # 是否上傳盈再表資料
-UPLOAD_YINGZAIBIAO_TARGET: List[str] = ["all"]  # r2, gdrive, supabase（預設使用與彙總報表相同的設定）
+UPLOAD_YINGZAIBIAO_TARGET: List[str] = ["all"]  # r2, gdrive, supabase
 UPLOAD_SUMMARY_REPORT: bool = True # 是否上傳自動產生的彙總報表
 UPLOAD_SUMMARY_REPORT_TARGET: List[str] = ["all"]  # r2, gdrive, supabase
 
@@ -61,8 +61,10 @@ SUMMARY_YEARS = 8  # 預設彙總報表的年份數
 # 上傳相關獨立設定
 # =========================
 # Google Drive Apps Script 設定 ( as@poohsreg )
-GDRIVE_AS_URL: str = "https://script.google.com/macros/s/AKfycbxpdvseNcLthew9C9VPAFiCtzDQdDvTcHWN0hc2x9PCusZhvoWmWyvOKJIzzFyabTk8kA/exec"
+GDRIVE_AS_URL: str = "https://script.google.com/macros/s/AKfycbwNaidXisW6Bydp1CTX2VlnkgLA9qKoIBizgQnb5lCak6T27-THl4QKmT0VqIlWvNDmCQ/exec"
 GDRIVE_FOLDER_ID: str = "12ar4cYTO8zq8xgLY76cljn5b_bA2q6ux"
+GDRIVE_AUTO_CONVERT_TO_SHEETS: bool = True  # 是否自動將 CSV 轉換為 Google Sheets
+GDRIVE_KEEP_CSV_BACKUP: bool = True  # 是否保留原始 CSV 備份
 # Supabase 設定 ( supabase@of2607 )
 SUPABASE_URL: str = "https://btzjjozytwtbgdznralj.supabase.co"
 SUPABASE_KEY: str = "sb_secret_fjzIJ8cx3xnsE8xQ18-AMw_ctrb8gkD"

@@ -12,7 +12,9 @@ def get_uploaders(targets: List[str], config: Dict) -> List[Uploader]:
         # Apps Script Web App 方式
         "gdrive": partial(GDriveASUploader,
             as_url=config.get("gdrive_as_url"),
-            folder_id=config.get("gdrive_folder_id")
+            folder_id=config.get("gdrive_folder_id"),
+            auto_convert_to_sheets=config.get("gdrive_auto_convert_to_sheets", True),
+            keep_csv_backup=config.get("gdrive_keep_csv_backup", True)
         ),
         "supabase": partial(SupabaseUploader,
             url=config.get("supabase_url"),
