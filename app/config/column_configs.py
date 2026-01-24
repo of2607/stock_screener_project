@@ -136,6 +136,13 @@ NUMERIC_COLUMNS: Dict[str, List[str]] = {
 }
 
 # =========================
+# 文字欄位設定（需要強制以文字格式儲存的欄位）
+# =========================
+TEXT_COLUMNS: Dict[str, List[str]] = {
+    'yingzaibiao': ['Symbol']  # Symbol 必須以文字格式儲存
+}
+
+# =========================
 # 欄位重新命名對應
 # =========================
 COLUMN_RENAME_MAP: Dict[str, Dict[str, str]] = {
@@ -222,6 +229,18 @@ def get_numeric_columns(report_type: str) -> List[str]:
         數值欄位名稱清單
     """
     return NUMERIC_COLUMNS.get(report_type, []).copy()
+
+def get_text_columns(report_type: str) -> List[str]:
+    """
+    取得指定報表類型需要以文字格式儲存的欄位清單
+    
+    Args:
+        report_type: 報表類型
+        
+    Returns:
+        文字欄位名稱清單
+    """
+    return TEXT_COLUMNS.get(report_type, []).copy()
 
 def get_rename_mapping(report_type: str) -> Dict[str, str]:
     """

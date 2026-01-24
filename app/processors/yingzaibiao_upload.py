@@ -4,6 +4,7 @@
 """
 import os
 from config import settings
+from config.settings import YINGZAIBIAO_CSV_PATH, YINGZAIBIAO_JSON_PATH
 from utils.uploader.upload import upload
 
 def main():
@@ -11,9 +12,9 @@ def main():
     upload_type = getattr(settings, "UPLOAD_YINGZAIBIAO_TARGET", getattr(settings, "UPLOAD_SUMMARY_REPORT_TARGET", ["all"]))
     targets = upload_type if isinstance(upload_type, list) else [upload_type]
 
-    # 設定檔案路徑
-    csv_path = "datas/merged_data/csv/latest_yingzaibiao.csv"
-    json_path = "datas/merged_data/json/latest_yingzaibiao.json"
+    # 從 settings 取得檔案路徑
+    csv_path = YINGZAIBIAO_CSV_PATH
+    json_path = YINGZAIBIAO_JSON_PATH
 
     config = {
         "gdrive_as_url": getattr(settings, "GDRIVE_AS_URL", None),

@@ -6,6 +6,7 @@
 """
 import os
 import json
+import csv
 from pathlib import Path
 from typing import Optional
 import pandas as pd
@@ -16,6 +17,7 @@ from config.settings import (
     YINGZAIBIAO_CSV_PATH,
     YINGZAIBIAO_JSON_PATH
 )
+from config.column_configs import get_text_columns
 
 
 class YingZaiBiaoProcessor:
@@ -162,7 +164,7 @@ class YingZaiBiaoProcessor:
     
     def _save_csv(self, df: pd.DataFrame) -> None:
         """
-        儲存為最簡單的 CSV 檔案（針對 Google Sheets）
+        儲存為 CSV 檔案（使用架構定義的文字欄位格式）
         
         Args:
             df: 要儲存的 DataFrame
@@ -171,16 +173,20 @@ class YingZaiBiaoProcessor:
             # 確保目錄存在
             self.csv_output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # 使用最簡單的 CSV 格式
-            # - 不使用 BOM（Google Sheets 有時候對 BOM 敏感）
-            # - 不加引號（QUOTE_NONE）除非必要
-            # - 所有數據已經在 clean_data 中轉為字串並清理過
+            # 取得需要以文字格式儲存的欄位，確保為字串型態
+            text_columns = get_text_columns('yingzaibiao')
+            for col in text_columns:
+                if col in df.columns:
+                    df[col] = df[col].astype(str)
+                    self.logger.debug(f"{col} 欄位已設為文字格式")
+            
+            # 儲存 CSV - 使用 QUOTE_NONNUMERIC 讓所有文字欄位自動加上雙引號
             df.to_csv(
                 self.csv_output_path, 
                 index=False, 
-                encoding='utf-8-sig',  # 改用純 utf-8-sig
+                encoding='utf-8-sig',
                 lineterminator='\n',
-                quoting=0  # csv.QUOTE_MINIMAL
+                quoting=csv.QUOTE_NONNUMERIC  # 對所有非數字內容加雙引號
             )
             
             self.logger.success(f"CSV 已儲存: {self.csv_output_path}")
