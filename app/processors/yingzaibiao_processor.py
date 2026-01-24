@@ -17,7 +17,7 @@ from config.settings import (
     YINGZAIBIAO_CSV_PATH,
     YINGZAIBIAO_JSON_PATH
 )
-from config.column_configs import get_text_columns
+from config.column_configs import get_text_columns, get_numeric_columns
 
 
 class YingZaiBiaoProcessor:
@@ -141,8 +141,13 @@ class YingZaiBiaoProcessor:
         # 移除不安全的字符
         df.columns = df.columns.str.replace(r'[^\w\u4e00-\u9fff_]', '', regex=True)
         
-        # 處理所有欄位的資料 - 統一轉為字串（最簡單、最相容）
+        # 取得數值欄位清單
+        numeric_cols = get_numeric_columns('yingzaibiao')
+        
+        # 處理非數值欄位的資料 - 轉為字串並清理
         for col in df.columns:
+            if col in numeric_cols:
+                continue  # 數值欄位稍後處理
             df[col] = df[col].astype(str).str.strip()  # 加上 strip() 移除多餘空白
             # 清理不可見字符
             df[col] = df[col].str.replace(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]', '', regex=True)
@@ -158,7 +163,34 @@ class YingZaiBiaoProcessor:
             # 移除多餘的連續空白
             df[col] = df[col].str.replace(r'\s+', ' ', regex=True).str.strip()
         
+        # 轉換數值欄位
+        df = self._convert_numeric_columns(df)
+        
         self.logger.debug(f"清理後資料: {len(df)} 筆，{len(df.columns)} 欄")
+        
+        return df
+    
+    def _convert_numeric_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        轉換數值欄位為數字格式
+        
+        Args:
+            df: 要轉換的 DataFrame
+            
+        Returns:
+            轉換後的 DataFrame
+        """
+        numeric_cols = get_numeric_columns('yingzaibiao')
+        
+        for col in numeric_cols:
+            if col not in df.columns:
+                continue
+                
+            try:
+                # 轉換為數值，錯誤的值會變成 NaN
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            except Exception as e:
+                self.logger.warning(f"轉換 {col} 為數值時發生錯誤: {e}")
         
         return df
     
