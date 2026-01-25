@@ -230,16 +230,29 @@ class SeleniumBaseDownloader(BaseDownloader):
                 return False
             
             # 載入 cookies 到瀏覽器
+            loaded_count = 0
             for cookie in cookies:
                 # 移除可能導致錯誤的欄位
                 cookie.pop('sameSite', None)
                 cookie.pop('expiry', None)
+                
+                # 確保 domain 欄位存在且正確
+                if 'domain' not in cookie:
+                    current_domain = self.driver.current_url.split('/')[2]
+                    cookie['domain'] = current_domain
+                    self.logger.debug(f"為 cookie 設定 domain: {current_domain}")
+                
                 try:
                     self.driver.add_cookie(cookie)
+                    loaded_count += 1
                 except Exception as e:
-                    self.logger.debug(f"跳過無效 cookie: {e}")
+                    self.logger.debug(f"跳過無效 cookie (name={cookie.get('name', 'unknown')}): {e}")
             
-            self.logger.success(f"成功載入 {len(cookies)} 個 cookies")
+            if loaded_count == 0:
+                self.logger.error("沒有成功載入任何 cookies")
+                return False
+            
+            self.logger.success(f"成功載入 {loaded_count}/{len(cookies)} 個 cookies")
             return True
             
         except Exception as e:

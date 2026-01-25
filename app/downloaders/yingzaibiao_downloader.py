@@ -62,25 +62,48 @@ class YingZaiBiaoDownloader(SeleniumBaseDownloader):
             if self.cookies_data or self.cookies_path.exists():
                 self.logger.info("嘗試使用 cookies 登入...")
                 
-                # 先訪問網站以設定 domain
-                self.driver.get(self.target_url)
+                # 先訪問登入頁面以設定正確的 domain
+                self.logger.debug(f"訪問登入頁面設定 domain: {self.login_url}")
+                self.driver.get(self.login_url)
                 time.sleep(2)
                 
                 # 載入 cookies
                 if self.load_cookies(cookies_data=self.cookies_data, cookies_path=self.cookies_path):
-                    # 重新載入頁面以套用 cookies
+                    # 重新整理登入頁面，讓網站檢查 cookies 並自動跳轉
+                    self.logger.debug("重新整理頁面以套用 cookies...")
                     self.driver.refresh()
                     time.sleep(3)
                     
-                    # 驗證是否已登入（檢查是否在下載頁面）
+                    # 檢查網站是否自動跳轉（如果 cookies 有效，通常會跳轉到主頁或保持登入狀態）
+                    current_url = self.driver.current_url
+                    self.logger.debug(f"刷新後的 URL: {current_url}")
+                    
+                    # 手動前往下載頁面測試
+                    self.logger.debug(f"前往下載頁面: {self.target_url}")
+                    self.driver.get(self.target_url)
+                    time.sleep(3)
+                    
+                    # 驗證是否已登入
                     try:
-                        self.wait.until(
-                            EC.presence_of_element_located((By.ID, "ctl00_ContentPlaceHolder1_Linkbutton1"))
-                        )
-                        self.logger.success("使用 cookies 登入成功")
-                        return True
-                    except:
-                        self.logger.warning("Cookies 可能已過期，改用帳密登入...")
+                        final_url = self.driver.current_url
+                        self.logger.debug(f"最終 URL: {final_url}")
+                        
+                        # 檢查是否被重定向回登入頁面
+                        if "Login.aspx" in final_url:
+                            self.logger.warning("Cookies 已過期（訪問下載頁面時被重定向），改用帳密登入...")
+                        else:
+                            # 檢查下載按鈕是否存在
+                            self.wait.until(
+                                EC.presence_of_element_located((By.ID, "ctl00_ContentPlaceHolder1_Linkbutton1"))
+                            )
+                            self.logger.success("使用 cookies 登入成功")
+                            return True
+                    except TimeoutException as e:
+                        self.logger.warning(f"找不到下載按鈕，Cookies 可能已過期: {e}")
+                    except Exception as e:
+                        self.logger.warning(f"驗證登入狀態時發生錯誤: {e}")
+                else:
+                    self.logger.warning("載入 cookies 失敗")
             
             # 策略 2: 使用帳號密碼登入
             self.logger.progress("前往盈再表登入頁面...")
