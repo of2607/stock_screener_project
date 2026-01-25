@@ -98,8 +98,21 @@ class YingZaiBiaoProcessor:
         
         # 1. 檢查輸入檔案是否存在
         if not input_path.exists():
-            self.logger.error(f"找不到輸入檔案: {input_path}")
-            return False
+            self.logger.warning(f"找不到輸入檔案: {input_path}")
+            
+            # 檢查是否已有輸出檔案
+            if csv_path.exists() or json_path.exists():
+                self.logger.info("但發現已有輸出檔案，將使用現有資料")
+                existing_files = []
+                if csv_path.exists():
+                    existing_files.append(str(csv_path))
+                if json_path.exists():
+                    existing_files.append(str(json_path))
+                self.logger.success(f"現有檔案: {', '.join(existing_files)}")
+                return True
+            else:
+                self.logger.error("也找不到任何現有輸出檔案")
+                return False
         
         try:
             # 2. 讀取 Excel 檔案

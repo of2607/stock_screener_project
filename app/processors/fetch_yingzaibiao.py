@@ -68,8 +68,7 @@ class YingZaiBiaoFetcher:
             success, _ = self.downloader.download_and_save()
             
             if not success:
-                self.logger.error("盈再表資料下載失敗")
-                return False
+                self.logger.warning("⚠️ 盈再表資料下載失敗，將嘗試處理已有的資料...")
             
             # ========================================
             # 步驟 2: 處理台股資料
@@ -139,7 +138,10 @@ async def main():
     success = await fetcher.fetch_and_save()
     
     if not success:
-        sys.exit(1)
+        print("⚠️ 盈再表資料處理未完全成功，但不影響後續流程")
+    
+    # 不再 sys.exit(1)，讓後續流程繼續執行
+    return success
 
 
 if __name__ == "__main__":
