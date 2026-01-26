@@ -172,11 +172,23 @@ NUMERIC_COLUMNS: Dict[str, List[str]] = {
         "ROE3",
         "ROE4",
         "ROE5",
+        "Employee",
+        "交易所",
         "Shares",
+        "R&D Expenditure",
+        "SG&A Expenditure",
+        "市值($m)",
+        "COUNTRY",
+        "ESG",
+        "Environment",
+        "Society",
+        "Governance",
+        "Controversy",
+        "財報",
         "最近營收年度",
         "營收",
         "近12月最高價",
-        "近12月最低價",
+        "近12月最低價"
     ]
 }
 
@@ -184,8 +196,8 @@ NUMERIC_COLUMNS: Dict[str, List[str]] = {
 # 文字欄位設定（需要強制以文字格式儲存的欄位）
 # =========================
 TEXT_COLUMNS: Dict[str, List[str]] = {
-    'yingzaibiao': ['Symbol'],  # Symbol 必須以文字格式儲存
-    'yingzaibiao_us': ['Symbol']  # 美股 Symbol 也必須以文字格式儲存
+    'yingzaibiao': ["Symbol","收盤日"],  # Symbol 必須以文字格式儲存
+    'yingzaibiao_us': ["Symbol","收盤日"]  # 美股 Symbol 也必須以文字格式儲存
 }
 
 # =========================

@@ -8,7 +8,7 @@ import os
 import json
 import csv
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 import pandas as pd
 
 from utils.logger import Logger
@@ -117,7 +117,11 @@ class YingZaiBiaoProcessor:
         try:
             # 2. 讀取 Excel 檔案
             self.logger.progress(f"讀取 {input_path.name}...")
-            df = self._read_excel_file(input_path)
+
+            # 取得需要強制讀取為文字的欄位設定
+            text_columns = get_text_columns(column_config_key)
+            
+            df = self._read_excel_file(input_path, text_columns)
             
             if df is None or df.empty:
                 self.logger.error("讀取檔案失敗或檔案為空")
@@ -150,19 +154,24 @@ class YingZaiBiaoProcessor:
             self.logger.debug(traceback.format_exc())
             return False
     
-    def _read_excel_file(self, file_path: Path) -> Optional[pd.DataFrame]:
+    def _read_excel_file(self, file_path: Path, text_columns: Optional[List[str]] = None) -> Optional[pd.DataFrame]:
         """
         讀取 Excel 檔案
         
         Args:
             file_path: Excel 檔案路徑
+            text_columns: 指定要強制讀取為文字格式的欄位列表
             
         Returns:
             DataFrame 或 None
         """
         try:
+            # 建立 dtype 字典，強制指定欄位為字串
+            dtype_dict = {col: str for col in text_columns} if text_columns else None
+            
             # 嘗試讀取第一個工作表
-            df = pd.read_excel(file_path, sheet_name=0)
+            # 使用 dtype 參數來防止自動轉型（如日期字串變成浮點數）
+            df = pd.read_excel(file_path, sheet_name=0, dtype=dtype_dict)
             
             # 如果第一行是標題，pandas 會自動處理
             # 但如果有多餘的空行，需要清理
@@ -176,7 +185,10 @@ class YingZaiBiaoProcessor:
             # 嘗試使用其他編碼或方法
             try:
                 self.logger.debug("嘗試使用 openpyxl 引擎...")
-                df = pd.read_excel(file_path, sheet_name=0, engine='openpyxl')
+                # 重新定義 dtype_dict (以防萬一上面出錯)
+                dtype_dict = {col: str for col in text_columns} if text_columns else None
+                
+                df = pd.read_excel(file_path, sheet_name=0, engine='openpyxl', dtype=dtype_dict)
                 df = df.dropna(how='all')
                 return df
             except Exception as e2:

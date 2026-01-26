@@ -149,6 +149,19 @@ class SeleniumBaseDownloader(BaseDownloader):
                 self.logger.info("使用標準 Chrome WebDriver")
             
             self.wait = WebDriverWait(self.driver, 10)
+            # 透過 CDP 允許多檔案下載，避免第二次下載被阻擋
+            try:
+                self.driver.execute_cdp_cmd(
+                    'Page.setDownloadBehavior',
+                    {
+                        'behavior': 'allow',
+                        'downloadPath': str(self.download_dir.absolute()),
+                    },
+                )
+                self.logger.debug("CDP: 已設定允許多檔案下載")
+            except Exception as _e:
+                # 某些環境（老舊 Chrome/Chromium）可能不支援，忽略
+                self.logger.debug(f"CDP 設定多檔下載失敗（可忽略）: {_e}")
             self.logger.success("Chrome WebDriver 初始化成功")
         except Exception as e:
             self.logger.error(f"Chrome WebDriver 初始化失敗: {e}")
@@ -167,7 +180,7 @@ class SeleniumBaseDownloader(BaseDownloader):
                 self.wait = None
     
     def save_cookies(self, cookies_path: Path) -> bool:
-        """儲存當前 cookies 到檔案
+        """儲存當前 cookies 到檔案 (JSON 格式)
         
         Args:
             cookies_path: cookies 檔案路徑
@@ -183,10 +196,10 @@ class SeleniumBaseDownloader(BaseDownloader):
             cookies = self.driver.get_cookies()
             cookies_path.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(cookies_path, 'wb') as f:
-                pickle.dump(cookies, f)
+            with open(cookies_path, 'w', encoding='utf-8') as f:
+                json.dump(cookies, f, indent=2)
             
-            self.logger.success(f"Cookies 已儲存: {cookies_path}")
+            self.logger.success(f"Cookies 已儲存 (JSON): {cookies_path}")
             return True
         except Exception as e:
             self.logger.error(f"儲存 cookies 失敗: {e}")
@@ -213,36 +226,49 @@ class SeleniumBaseDownloader(BaseDownloader):
             if cookies_data:
                 self.logger.debug("從環境變數載入 cookies...")
                 try:
-                    # 移除可能的空白字符
+                    # 嘗試以 Base64 JSON -> list 解碼
                     cookies_data = cookies_data.strip()
-                    cookies_bytes = base64.b64decode(cookies_data)
-                    cookies = pickle.loads(cookies_bytes)
-                except (UnicodeDecodeError, ValueError, pickle.UnpicklingError) as e:
+                    decoded = base64.b64decode(cookies_data)
+                    try:
+                        cookies = json.loads(decoded.decode('utf-8'))
+                    except Exception:
+                        # 回退為 Base64 pickle
+                        cookies = pickle.loads(decoded)
+                except Exception as e:
                     self.logger.warning(f"Cookie 解碼失敗，可能格式錯誤: {e}")
                     return False
             # 其次使用本地檔案
             elif cookies_path and cookies_path.exists():
                 self.logger.debug(f"從檔案載入 cookies: {cookies_path}")
-                with open(cookies_path, 'rb') as f:
-                    cookies = pickle.load(f)
+                # 先嘗試 JSON，失敗再回退 pickle
+                try:
+                    with open(cookies_path, 'r', encoding='utf-8') as f:
+                        cookies = json.load(f)
+                except Exception:
+                    with open(cookies_path, 'rb') as f:
+                        cookies = pickle.load(f)
             else:
                 self.logger.debug("沒有找到 cookies")
                 return False
             
-            # 載入 cookies 到瀏覽器
+            # 清除現有 cookies 以免與新載入的衝突
+            self.driver.delete_all_cookies()
+            
+            # 載入 cookies 到瀏覽器 (Robust Strategy)
             loaded_count = 0
+            
             for cookie in cookies:
-                # 移除可能導致錯誤的欄位
-                cookie.pop('sameSite', None)
-                cookie.pop('expiry', None)
-                
-                # 確保 domain 欄位存在且正確
-                if 'domain' not in cookie:
-                    current_domain = self.driver.current_url.split('/')[2]
-                    cookie['domain'] = current_domain
-                    self.logger.debug(f"為 cookie 設定 domain: {current_domain}")
-                
                 try:
+                    # 修正：只移除 domain 和 expiry，保留 secure/sameSite/httpOnly 等重要屬性
+                    # 移除 domain 以避免跨域或子域名匹配問題 (selenium 會自動設為當前 domain)
+                    # 移除 expiry 以防止因時間差或已過期導致寫入失敗 (變成 session cookie)
+                    cookie.pop('domain', None)
+                    cookie.pop('expiry', None)
+
+                    # 如果當前是 HTTP 環境但 cookie 要求 Secure，則強制移除 Secure
+                    # (但在 production 通常是 HTTPS，所以保留 Secure 是正確的)
+                    # 這裡為了保險起見，如果是因為環境問題導致寫入失敗，selenium 通常會報錯
+                    
                     self.driver.add_cookie(cookie)
                     loaded_count += 1
                 except Exception as e:

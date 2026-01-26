@@ -1,387 +1,648 @@
 """
-盈再表下載器
-============
+盈再表下載器 - 重構版本
+========================
 
-使用 Selenium 自動登入並下載 twlist.xlsx
+採用策略模式，分離不同環境的下載方式：
+1. CookieBasedStrategy - 仅使用 Cookie，无需登入（GitHub Actions）
+2. LocalDevelopmentStrategy - 本地開發，支持手動 reCAPTCHA
+3. CacheLoaderStrategy - 离线降级，使用本地缓存
+
+架構簡潔，易於維護和擴展
 """
 import os
 import time
+import json
+import base64
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, List
+from datetime import datetime, timedelta
 
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from .selenium_base_downloader import SeleniumBaseDownloader
 from config.settings import (
-    YINGZAIBIAO_URL, 
+    YINGZAIBIAO_URL,
     YINGZAIBIAO_LOGIN_URL,
     YINGZAIBIAO_DOWNLOAD_DIR,
     YINGZAIBIAO_COOKIES_PATH,
-    YINGZAIBIAO_RAW_DIR
+    YINGZAIBIAO_RAW_DIR,
 )
 
 
-class YingZaiBiaoDownloader(SeleniumBaseDownloader):
-    """盈再表下載器 - 自動登入並下載 twlist.xlsx"""
-    
-    def __init__(self, logger):
-        """
-        初始化盈再表下載器
-        
-        Args:
-            logger: 日誌記錄器
-        """
-        # 設定下載目錄為 settings 中配置的路徑
-        super().__init__(logger, YINGZAIBIAO_DOWNLOAD_DIR)
-        
-        # 從設定檔讀取 URL，從環境變數讀取憑證
-        self.login_url = YINGZAIBIAO_LOGIN_URL
-        self.target_url = YINGZAIBIAO_URL
-        self.username = os.getenv("YINGZAIBIAO_USERNAME", "")
-        self.password = os.getenv("YINGZAIBIAO_PASSWORD", "")
-        self.cookies_data = os.getenv("YINGZAIBIAO_COOKIES", "")  # 從環境變數讀取 cookies
-        self.cookies_path = Path(YINGZAIBIAO_COOKIES_PATH)  # 從 settings 讀取 cookies 路徑
-        
-        if not self.username or not self.password:
-            if not self.cookies_data and not self.cookies_path.exists():
-                self.logger.warning("未設定盈再表登入憑證或 cookies")
-    
+# ============================================================================
+# 輔助類：提供最小實作的 SeleniumBaseDownloader
+# ============================================================================
+
+class _PlainSelenium(SeleniumBaseDownloader):
+    """給策略使用的輕量封裝，實作抽象方法為 no-op"""
+
+    def __init__(self, logger, download_dir: str):
+        super().__init__(logger, download_dir)
+
     def _perform_login(self) -> bool:
+        return True
+
+    def _trigger_download(self) -> bool:
+        return True
+
+# ============================================================================
+# 策略基類
+# ============================================================================
+
+class YingZaiBiaoStrategy(ABC):
+    """盈再表下載策略抽象基類"""
+
+    def __init__(self, logger):
+        self.logger = logger
+        self.driver = None
+        self.wait = None
+        self.download_dir = Path(YINGZAIBIAO_DOWNLOAD_DIR)
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+
+    @abstractmethod
+    def download(self) -> Tuple[bool, str]:
         """
-        執行登入流程（優先使用 cookies，失敗則使用帳密登入）
+        執行下載
         
         Returns:
-            登入是否成功
+            (是否成功, 說明訊息)
         """
+        pass
+
+    def _cleanup(self):
+        """清理資源"""
+        pass
+
+    def _allow_multiple_downloads(self):
+        """透過 CDP 設定允許多檔下載，避免提示阻擋"""
+        if not self.driver:
+            return
         try:
-            # 策略 1: 嘗試使用 cookies 登入
-            if self.cookies_data or self.cookies_path.exists():
-                self.logger.info("嘗試使用 cookies 登入...")
-                
-                # 先訪問登入頁面以設定正確的 domain
-                self.logger.debug(f"訪問登入頁面設定 domain: {self.login_url}")
-                self.driver.get(self.login_url)
-                time.sleep(2)
-                
-                # 載入 cookies
-                if self.load_cookies(cookies_data=self.cookies_data, cookies_path=self.cookies_path):
-                    # 重新整理登入頁面，讓網站檢查 cookies 並自動跳轉
-                    self.logger.debug("重新整理頁面以套用 cookies...")
-                    self.driver.refresh()
-                    time.sleep(3)
-                    
-                    # 檢查網站是否自動跳轉（如果 cookies 有效，通常會跳轉到主頁或保持登入狀態）
-                    current_url = self.driver.current_url
-                    self.logger.debug(f"刷新後的 URL: {current_url}")
-                    
-                    # 手動前往下載頁面測試
-                    self.logger.debug(f"前往下載頁面: {self.target_url}")
-                    self.driver.get(self.target_url)
-                    time.sleep(3)
-                    
-                    # 驗證是否已登入
-                    try:
-                        final_url = self.driver.current_url
-                        self.logger.debug(f"最終 URL: {final_url}")
-                        
-                        # 檢查是否被重定向回登入頁面
-                        if "Login.aspx" in final_url:
-                            self.logger.warning("Cookies 已過期（訪問下載頁面時被重定向），改用帳密登入...")
-                        else:
-                            # 檢查下載按鈕是否存在
-                            self.wait.until(
-                                EC.presence_of_element_located((By.ID, "ctl00_ContentPlaceHolder1_Linkbutton1"))
-                            )
-                            self.logger.success("使用 cookies 登入成功")
-                            return True
-                    except TimeoutException as e:
-                        self.logger.warning(f"找不到下載按鈕，Cookies 可能已過期: {e}")
-                    except Exception as e:
-                        self.logger.warning(f"驗證登入狀態時發生錯誤: {e}")
-                else:
-                    self.logger.warning("載入 cookies 失敗")
-            
-            # 策略 2: 使用帳號密碼登入
-            self.logger.progress("前往盈再表登入頁面...")
-            self.driver.get(self.login_url)
-            self.logger.info("等待頁面載入（包含 Google reCAPTCHA）...")
-            time.sleep(5)  # 增加等待時間讓 Google 驗證完成
-            
-            # 檢查登入憑證
-            if not self.username or not self.password:
-                self.logger.error("未提供登入憑證")
-                return False
-            
-            self.logger.info("開始自動登入...")
-            
-            # 使用具體的 ID 定位元素
-            try:
-                # 等待並找到帳號輸入框
-                username_input = self.wait.until(
-                    EC.presence_of_element_located((By.ID, "ctl00_ContentPlaceHolder1_txtUsername"))
-                )
-                
-                # 找到密碼輸入框
-                password_input = self.driver.find_element(By.ID, "ctl00_ContentPlaceHolder1_txtPassword")
-                
-                # 找到登入按鈕
-                login_button = self.driver.find_element(By.ID, "ctl00_ContentPlaceHolder1_btnLogin")
-                
-                # 清空並輸入帳號密碼（使用 send_keys 讓 reCAPTCHA 看到真實用戶行為）
-                self.logger.debug("輸入登入憑證...")
-                username_input.clear()
-                username_input.send_keys(self.username)
-                time.sleep(0.5)
-                
-                password_input.clear()
-                password_input.send_keys(self.password)
-                time.sleep(0.5)
-                
-                # 等待 reCAPTCHA 驗證完成（給予足夠時間）
-                self.logger.info("等待 Google reCAPTCHA 驗證...")
-                time.sleep(3)
-                
-                # 使用 JavaScript 點擊登入按鈕（避免被廣告遮擋）
-                self.logger.debug("點擊登入按鈕...")
-                self.driver.execute_script("arguments[0].click();", login_button)
-                
-                # 等待登入處理和頁面跳轉
-                self.logger.info("等待登入處理...")
-                time.sleep(10)  # 增加等待時間確保跳轉完成
-                
-                # 驗證登入是否成功（檢查URL是否已改變或登入按鈕是否還存在）
-                current_url = self.driver.current_url
-                self.logger.debug(f"當前 URL: {current_url}")
-                
-                # 如果仍在登入頁面，表示登入失敗
-                if "Login.aspx" in current_url:
-                    self.logger.error("登入失敗（仍在登入頁面）")
-                    # 檢查是否有錯誤訊息
-                    try:
-                        error_element = self.driver.find_element(By.CLASS_NAME, "error")
-                        self.logger.error(f"錯誤訊息: {error_element.text}")
-                    except:
-                        pass
-                    return False
-                
-                # 登入成功
-                self.logger.success("登入成功（URL 已改變）")
-                
-                # 儲存 cookies 供下次使用
-                self.save_cookies(self.cookies_path)
-                self.logger.info("提示：可將 cookies 加入 GitHub Secrets 以跳過驗證")
-                self.logger.info(f"執行：cat {self.cookies_path} | base64 > datas/raw_data/yingzaibiao/cookies.txt")
-                self.logger.info("然後將 cookies.txt 內容設為 GitHub Secret: YINGZAIBIAO_COOKIES")
-                
-                # 登入後會跳轉，需要再次前往下載頁面
-                self.logger.debug("前往下載頁面...")
-                self.driver.get(self.target_url)
-                time.sleep(5)  # 增加等待時間
-                
-                return True
-                    
-            except NoSuchElementException as e:
-                self.logger.error(f"找不到登入元素: {e}")
-                return False
-                
-        except TimeoutException:
-            self.logger.error("頁面載入超時")
-            return False
-        except Exception as e:
-            self.logger.error(f"登入過程發生錯誤: {e}")
-            return False
-    
-    def _download_market_data(self, button_id: str, filename: str) -> Tuple[bool, Optional[Path]]:
-        """
-        下載指定市場的資料
-        
-        Args:
-            button_id: 下載按鈕的 ID
-            filename: 目標檔案名稱 (例如: twlist.xlsx 或 uslist.xlsx)
-            
-        Returns:
-            (是否成功, 最終檔案路徑)
-        """
-        try:
-            # 等待下載按鈕可點擊
-            self.logger.progress(f"尋找下載按鈕 ({button_id})...")
-            download_button = self.wait.until(
-                EC.element_to_be_clickable((By.ID, button_id))
+            self.driver.execute_cdp_cmd(
+                "Page.setDownloadBehavior",
+                {
+                    "behavior": "allow",
+                    "downloadPath": str(self.download_dir),
+                },
             )
+            self.logger.debug("已設定允許多檔案下載")
+        except Exception as e:
+            self.logger.debug(f"設定多檔下載失敗（可忽略）: {e}")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._cleanup()
+
+
+# ============================================================================
+# 策略 1：仅使用 Cookie（推薦用於 GitHub Actions）
+# ============================================================================
+
+class CookieBasedStrategy(YingZaiBiaoStrategy):
+    """
+    仅使用 Cookie 的下載策略
+    
+    特點：
+    - 無需登入驗證
+    - 無 reCAPTCHA 干擾
+    - 適合 GitHub Actions 環境
+    - 需要预先提供有效的 Cookie
+    """
+
+    def __init__(self, logger, cookies_env_var: str = None, cookies_file: Path = None):
+        super().__init__(logger)
+        self.cookies_env_var = cookies_env_var or "YINGZAIBIAO_COOKIES"
+        self.cookies_file = cookies_file or Path(YINGZAIBIAO_COOKIES_PATH)
+        self.base_downloader = None
+
+    def download(self) -> Tuple[bool, str]:
+        """使用 Cookie 下載"""
+        try:
+            self.base_downloader = _PlainSelenium(self.logger, str(self.download_dir))
+            self.base_downloader._init_driver()
+            self.driver = self.base_downloader.driver
+            self.wait = self.base_downloader.wait
+
+            # 預先允許多檔案下載，避免 Chrome 再跳出提示
+            self._allow_multiple_downloads()
+
+            # 預先允許多檔案下載，避免 Chrome 再跳出提示
+            self._allow_multiple_downloads()
+
+            self.logger.info("使用 Cookie 策略下載")
             
-            # 先移除可能遮擋的 iframe（廣告）
+            # 檢查 Cookie 可用性
+            cookies_data = os.getenv(self.cookies_env_var, "")
+            if not cookies_data and not self.cookies_file.exists():
+                return False, "無可用 Cookie（請提供環境變數或本地檔案）"
+
+            # 【策略優化】訪問網站根目錄建立 domain context，避免觸發任何業務邏輯
+            base_url = "https://stocks.ddns.net/"
+            self.logger.debug(f"訪問網站根目錄以建立 Domain Context: {base_url}")
             try:
-                self.logger.debug("移除可能遮擋的 iframe 廣告...")
-                self.driver.execute_script("""
-                    var iframes = document.querySelectorAll('iframe[style*="z-index: 2147483647"]');
-                    iframes.forEach(function(iframe) {
-                        iframe.remove();
-                    });
-                """)
-            except:
-                pass
+                self.driver.get(base_url)
+                time.sleep(3)
+            except Exception as e:
+                return False, f"無法訪問網站: {e}"
+
+            # 加載 Cookie
+            if not self.base_downloader.load_cookies(
+                cookies_data=cookies_data,
+                cookies_path=self.cookies_file
+            ):
+                return False, "Cookie 加載失敗"
+
+            # 驗證關鍵 Cookie 是否成功載入
+            loaded_cookies = {c['name']: c['value'] for c in self.driver.get_cookies()}
+            has_auth = '.ASPXAUTH' in loaded_cookies
+            has_session = 'ASP.NET_SessionId' in loaded_cookies
+            self.logger.debug(f"Cookie 驗證: .ASPXAUTH={'✓' if has_auth else '✗'}, ASP.NET_SessionId={'✓' if has_session else '✗'}")
             
-            # 滾動到按鈕位置
-            self.driver.execute_script("arguments[0].scrollIntoView(true);", download_button)
-            time.sleep(0.5)
+            if not (has_auth and has_session):
+                self.logger.warning("⚠️ 關鍵認證 Cookie 缺失,可能導致登入失敗")
             
-            # 使用 JavaScript 點擊（避免被遮擋）
-            self.logger.debug(f"點擊下載按鈕 ({button_id})...")
-            self.driver.execute_script("arguments[0].click();", download_button)
-            self.logger.success("已觸發下載")
+            if has_auth:
+                auth_value = loaded_cookies['.ASPXAUTH']
+                self.logger.debug(f".ASPXAUTH 值前20字元: {auth_value[:20]}...")
+
+            # 直接訪問目標頁面
+            self.logger.debug(f"Cookie 注入完成,前往目標頁面: {YINGZAIBIAO_URL}")
+            self.driver.get(YINGZAIBIAO_URL)
+            time.sleep(5)
+
+            # 驗證是否成功進入下載頁面
+            current_url = self.driver.current_url
+            self.logger.debug(f"當前驗證 URL: {current_url}")
             
+            if current_url and "login.aspx" in current_url.lower():
+                return False, "Cookie 已過期，無法進入下載頁面"
+
+            # 檢查下載按鈕
+            try:
+                self.wait.until(
+                    EC.presence_of_element_located((By.ID, "ctl00_ContentPlaceHolder1_Linkbutton1"))
+                )
+                self.logger.success("Cookie 驗證成功，準備下載")
+            except TimeoutException:
+                return False, "找不到下載按鈕，Cookie 可能無效"
+
+            # 執行下載
+            success = self._execute_download()
+            if success:
+                return True, "使用 Cookie 成功下載"
+            else:
+                return False, "下載過程失敗"
+
+        except Exception as e:
+            self.logger.error(f"Cookie 策略執行失敗: {e}")
+            return False, f"異常: {str(e)}"
+        finally:
+            self._cleanup()
+
+    def _execute_download(self) -> bool:
+        """執行實際下載操作"""
+        tw_success = False
+        us_success = False
+
+        # 下載台股資料
+        try:
+            self.logger.info("下載台股資料 (twlist.xlsx)")
+            tw_success = self._download_file(
+                "ctl00_ContentPlaceHolder1_Linkbutton1",
+                "twlist.xlsx"
+            )
+        except Exception as e:
+            self.logger.error(f"下載台股失敗: {e}")
+
+        # 等待並清理
+        time.sleep(3)
+        self._cleanup_temp_dir()
+
+        # 下載美股資料
+        try:
+            self.logger.info("下載美股資料 (uslist.xlsx)")
+            us_success = self._download_file(
+                "ctl00_ContentPlaceHolder1_Export",
+                "uslist.xlsx"
+            )
+        except Exception as e:
+            self.logger.error(f"下載美股失敗: {e}")
+
+        # 最終清理
+        self._cleanup_temp_dir()
+        return tw_success or us_success
+
+    def _download_file(self, button_id: str, filename: str) -> bool:
+        """下載單個文件"""
+        try:
+            button = self.wait.until(EC.element_to_be_clickable((By.ID, button_id)))
+            self.logger.progress(f"點擊下載按鈕: {button_id}")
+            
+            self.driver.execute_script("arguments[0].click();", button)
+            time.sleep(2)
+
             # 等待下載完成
-            self.logger.info("等待下載完成...")
-            downloaded_file = self._wait_for_download_complete(timeout=60)
-            
-            if not downloaded_file:
-                self.logger.error("下載超時或失敗")
-                return False, None
-            
-            # 移動檔案到最終位置
+            downloaded = self.base_downloader._wait_for_download_complete(timeout=60)
+            if not downloaded:
+                self.logger.error(f"下載 {filename} 超時")
+                return False
+
+            # 移動到最終位置
             final_dir = Path(YINGZAIBIAO_RAW_DIR)
             final_dir.mkdir(parents=True, exist_ok=True)
             final_path = final_dir / filename
-            
-            # 檢查下載文件是否存在
-            if not downloaded_file.exists():
-                self.logger.error(f"下載的檔案不存在: {downloaded_file}")
-                return False, None
-            
-            # 移動並覆蓋
+
             if final_path.exists():
-                self.logger.debug(f"移除舊檔案: {final_path}")
                 final_path.unlink()
             
-            downloaded_file.rename(final_path)
-            self.logger.success(f"檔案已儲存: {final_path}")
-            
-            return True, final_path
-            
-        except TimeoutException:
-            self.logger.error(f"找不到下載按鈕或按鈕無法點擊: {button_id}")
-            return False, None
+            downloaded.rename(final_path)
+            self.logger.success(f"檔案已保存: {final_path}")
+            return True
+
         except Exception as e:
-            self.logger.error(f"下載時發生錯誤: {e}")
-            return False, None
-    
-    def _trigger_download(self) -> bool:
-        """
-        觸發下載動作（實作基類要求的抽象方法）
-        
-        此類使用 download_and_save() 方法處理完整下載流程，
-        此方法僅為滿足基類抽象方法要求而存在。
-        
-        Returns:
-            下載是否成功觸發
-        """
-        self.logger.warning("_trigger_download() 不應被直接調用，請使用 download_and_save()")
-        return True
-    
-    def download_and_save(self) -> Tuple[bool, Optional[Path]]:
-        """
-        下載 twlist.xlsx 和 uslist.xlsx 並儲存到指定位置
-        
-        Returns:
-            (是否成功, 最終檔案路徑)
-        """
-        self.logger.info("🚀 開始下載盈再表資料...")
-        
-        # 初始化瀏覽器 driver
+            self.logger.error(f"下載 {filename} 失敗: {e}")
+            return False
+
+    def _cleanup_temp_dir(self):
+        """清理臨時目錄"""
         try:
-            self._init_driver()
+            for f in self.download_dir.glob('*'):
+                if f.is_file():
+                    f.unlink()
         except Exception as e:
-            self.logger.error(f"初始化瀏覽器失敗: {e}")
-            return False, None
-        
-        # 執行登入
-        if not self._perform_login():
-            self.logger.error("登入失敗")
-            self._close_driver()
-            return False, None
-        
-        # 等待一段時間讓用戶手動關閉Chrome密碼彈窗（如果出現）
-        self.logger.warning("⚠️ 如果出現Chrome密碼警告彈窗，請手動關閉...")
-        self.logger.info("等待10秒讓你關閉彈窗...")
-        time.sleep(10)
-        
+            self.logger.debug(f"清理臨時檔案失敗: {e}")
+
+    def _cleanup(self):
+        """清理資源"""
+        if self.base_downloader:
+            self.base_downloader._close_driver()
+
+
+# ============================================================================
+# 策略 2：本地開發（支持手動 reCAPTCHA）
+# ============================================================================
+
+class LocalDevelopmentStrategy(YingZaiBiaoStrategy):
+    """
+    本地開發專用策略
+    
+    特點：
+    - 支持手動完成 reCAPTCHA
+    - 需要用戶帳密
+    - 自動保存 Cookie 供後續使用
+    - 仅用於本地開發環境
+    """
+
+    def __init__(self, logger):
+        super().__init__(logger)
+        self.username = os.getenv("YINGZAIBIAO_USERNAME", "")
+        self.password = os.getenv("YINGZAIBIAO_PASSWORD", "")
+        self.base_downloader = None
+
+    def download(self) -> Tuple[bool, str]:
+        """執行本地開發下載"""
+        if not self.username or not self.password:
+            return False, "未設定帳號密碼環境變數"
+
+        try:
+            self.base_downloader = _PlainSelenium(self.logger, str(self.download_dir))
+            self.base_downloader._init_driver()
+            self.driver = self.base_downloader.driver
+            self.wait = self.base_downloader.wait
+
+            # 預先允許多檔案下載
+            self._allow_multiple_downloads()
+
+            self.logger.info("使用本地開發策略（支持手動 reCAPTCHA）")
+
+            # 登入
+            if not self._perform_login():
+                return False, "登入失敗"
+
+            # 提示用戶手動處理
+            self.logger.warning("\n" + "=" * 70)
+            self.logger.warning("⚠️ 如果出現 Chrome 密碼警告彈窗，請手動關閉")
+            self.logger.warning("等待 10 秒...")
+            self.logger.warning("=" * 70 + "\n")
+            time.sleep(10)
+
+            # 執行下載
+            success = self._execute_download()
+            if success:
+                # 保存 Cookie 供 GitHub Actions 使用
+                self._save_cookies_for_ci()
+                return True, "本地開發下載成功"
+            else:
+                return False, "下載失敗"
+
+        except Exception as e:
+            self.logger.error(f"本地開發策略失敗: {e}")
+            return False, f"異常: {str(e)}"
+        finally:
+            self._cleanup()
+
+    def _perform_login(self) -> bool:
+        """執行登入"""
+        try:
+            self.logger.progress("前往登入頁面")
+            self.driver.get(YINGZAIBIAO_LOGIN_URL)
+            time.sleep(2)
+
+            # 輸入憑證
+            username_input = self.wait.until(
+                EC.presence_of_element_located((By.ID, "ctl00_ContentPlaceHolder1_txtUsername"))
+            )
+            password_input = self.driver.find_element(By.ID, "ctl00_ContentPlaceHolder1_txtPassword")
+            login_button = self.driver.find_element(By.ID, "ctl00_ContentPlaceHolder1_btnLogin")
+
+            self.logger.debug("輸入憑證")
+            username_input.clear()
+            username_input.send_keys(self.username)
+            time.sleep(0.3)
+
+            password_input.clear()
+            password_input.send_keys(self.password)
+            time.sleep(0.3)
+
+            # 提示 reCAPTCHA
+            self.logger.warning("\n" + "=" * 70)
+            self.logger.warning("⚠️ 如果看到 reCAPTCHA 驗證框，請手動完成驗證")
+            self.logger.warning("完成後，程式會自動點擊登入按鈕")
+            self.logger.warning("=" * 70 + "\n")
+            time.sleep(15)  # 給用戶足夠時間完成 reCAPTCHA
+
+            # 點擊登入
+            self.logger.debug("點擊登入按鈕")
+            self.driver.execute_script("arguments[0].click();", login_button)
+            time.sleep(10)
+
+            # 驗證登入結果
+            current_url = self.driver.current_url
+            if current_url and "login.aspx" in current_url.lower():
+                self.logger.error("登入失敗，仍在登入頁面")
+                self.base_downloader._take_screenshot("login_failed")
+                return False
+
+            self.logger.success("登入成功")
+            self.driver.get(YINGZAIBIAO_URL)
+            time.sleep(2)
+            return True
+
+        except Exception as e:
+            self.logger.error(f"登入失敗: {e}")
+            return False
+
+    def _execute_download(self) -> bool:
+        """執行下載"""
         tw_success = False
         us_success = False
-        
-        # 下載台股資料
+
         try:
-            self.logger.info("=" * 50)
-            self.logger.info("下載台股資料 (twlist.xlsx)")
-            self.logger.info("=" * 50)
-            
-            tw_success, tw_path = self._download_market_data(
-                "ctl00_ContentPlaceHolder1_Linkbutton1", 
-                "twlist.xlsx"
-            )
-            
-            if not tw_success:
-                self.logger.error("台股資料下載失敗")
-            
-            # 清理 temp 目錄的檔案
-            for temp_file in self.download_dir.glob('*'):
-                if temp_file.is_file():
-                    temp_file.unlink()
-                    
+            self.logger.info("下載台股資料")
+            tw_success = self._download_file("ctl00_ContentPlaceHolder1_Linkbutton1", "twlist.xlsx")
         except Exception as e:
-            self.logger.error(f"下載台股資料時發生錯誤: {e}")
-        
-        # 等待3秒確保檔案系統穩定
-        self.logger.info("等待3秒後下載美股資料...")
+            self.logger.error(f"下載台股失敗: {e}")
+
         time.sleep(3)
-        
-        # 授予自動下載權限（避免 Chrome 詢問）
+        self._cleanup_temp_dir()
+
         try:
-            self.logger.debug("設定自動下載權限...")
-            self.driver.execute_cdp_cmd('Browser.setDownloadBehavior', {
-                'behavior': 'allow',
-                'downloadPath': str(self.download_dir.absolute())
-            })
-            self.logger.debug("已設定允許自動下載")
+            self.logger.info("下載美股資料")
+            us_success = self._download_file("ctl00_ContentPlaceHolder1_Export", "uslist.xlsx")
         except Exception as e:
-            self.logger.warning(f"設定下載權限時發生錯誤: {e}")
-        
-        # 下載美股資料
+            self.logger.error(f"下載美股失敗: {e}")
+
+        self._cleanup_temp_dir()
+        return tw_success or us_success
+
+    def _download_file(self, button_id: str, filename: str) -> bool:
+        """下載文件"""
         try:
-            self.logger.info("=" * 50)
-            self.logger.info("下載美股資料 (uslist.xlsx)")
-            self.logger.info("=" * 50)
-            
-            us_success, us_path = self._download_market_data(
-                "ctl00_ContentPlaceHolder1_Export", 
-                "uslist.xlsx"
-            )
-            
-            if not us_success:
-                self.logger.error("美股資料下載失敗")
-            
-            # 清理 temp 目錄的檔案
-            for temp_file in self.download_dir.glob('*'):
-                if temp_file.is_file():
-                    temp_file.unlink()
-                    
+            button = self.wait.until(EC.element_to_be_clickable((By.ID, button_id)))
+            self.logger.progress(f"下載 {filename}")
+            self.driver.execute_script("arguments[0].click();", button)
+            time.sleep(2)
+
+            downloaded = self.base_downloader._wait_for_download_complete(timeout=60)
+            if not downloaded:
+                return False
+
+            final_dir = Path(YINGZAIBIAO_RAW_DIR)
+            final_dir.mkdir(parents=True, exist_ok=True)
+            final_path = final_dir / filename
+
+            if final_path.exists():
+                final_path.unlink()
+
+            downloaded.rename(final_path)
+            self.logger.success(f"保存: {final_path}")
+            return True
+
         except Exception as e:
-            self.logger.error(f"下載美股資料時發生錯誤: {e}")
+            self.logger.error(f"下載 {filename} 失敗: {e}")
+            return False
+
+    def _save_cookies_for_ci(self):
+        """保存 Cookie 供 GitHub Actions 使用"""
+        try:
+            cookies = self.driver.get_cookies()
+            
+            # 將 cookies 轉換為 JSON 格式（而非 pickle）
+            cookies_json = json.dumps(cookies)
+            cookies_b64 = base64.b64encode(cookies_json.encode()).decode()
+
+            self.logger.success("Cookie 已保存，用於 GitHub Actions")
+            self.logger.info("\n" + "=" * 70)
+            self.logger.info("📌 為了在 GitHub Actions 中使用 Cookie，請：")
+            self.logger.info("1. 複製以下內容：")
+            self.logger.info(cookies_b64[:50] + "...")
+            self.logger.info("2. 在 GitHub Repository → Settings → Secrets 中新增：")
+            self.logger.info("   名稱: YINGZAIBIAO_COOKIES")
+            self.logger.info("   值: <複製的內容>")
+            self.logger.info("=" * 70 + "\n")
+
+            # 同時儲存到本地
+            cookies_path = Path(YINGZAIBIAO_COOKIES_PATH)
+            cookies_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(cookies_path, 'w') as f:
+                json.dump(cookies, f, indent=2)
+            self.logger.debug(f"本地 Cookie 已保存: {cookies_path}")
+
+        except Exception as e:
+            self.logger.warning(f"保存 Cookie 失敗: {e}")
+
+    def _cleanup_temp_dir(self):
+        """清理臨時目錄"""
+        try:
+            for f in self.download_dir.glob('*'):
+                if f.is_file():
+                    f.unlink()
+        except Exception as e:
+            self.logger.debug(f"清理臨時檔案失敗: {e}")
+
+    def _cleanup(self):
+        """清理資源"""
+        if self.base_downloader:
+            self.base_downloader._close_driver()
+
+
+# ============================================================================
+# 策略 3：緩存降級（离线模式）
+# ============================================================================
+
+class CacheLoaderStrategy(YingZaiBiaoStrategy):
+    """
+    緩存降級策略
+    
+    特點：
+    - 不進行任何下載
+    - 直接使用本地緩存文件
+    - 檢查緩存是否過期
+    - 用於備用方案
+    """
+
+    def __init__(self, logger, cache_retention_days: int = 7):
+        super().__init__(logger)
+        self.cache_retention_days = cache_retention_days
+
+    def download(self) -> Tuple[bool, str]:
+        """檢查並返回緩存狀態"""
+        try:
+            self.logger.info("使用緩存降級策略")
+
+            excel_files = [
+                Path(YINGZAIBIAO_RAW_DIR) / "twlist.xlsx",
+                Path(YINGZAIBIAO_RAW_DIR) / "uslist.xlsx"
+            ]
+
+            missing_files = []
+            expired_files = []
+
+            for f in excel_files:
+                if not f.exists():
+                    missing_files.append(f.name)
+                else:
+                    # 檢查文件是否過期
+                    file_age = datetime.now() - datetime.fromtimestamp(f.stat().st_mtime)
+                    if file_age > timedelta(days=self.cache_retention_days):
+                        expired_files.append(f"{f.name} ({file_age.days} 天前)")
+
+            if missing_files:
+                msg = f"缺少文件: {', '.join(missing_files)}"
+                self.logger.warning(msg)
+                return False, msg
+
+            if expired_files:
+                msg = f"緩存已過期: {', '.join(expired_files)}"
+                self.logger.warning(msg)
+                # 但仍返回 True，因為至少有數據可用
+                self.logger.info("使用過期緩存繼續處理")
+
+            self.logger.success("使用本地緩存文件")
+            return True, "使用本地緩存"
+
+        except Exception as e:
+            self.logger.error(f"緩存檢查失敗: {e}")
+            return False, f"異常: {str(e)}"
+
+
+# ============================================================================
+# 策略工廠
+# ============================================================================
+
+class DownloadStrategyFactory:
+    """選擇合適的下載策略"""
+
+    @staticmethod
+    def create_strategy(logger) -> YingZaiBiaoStrategy:
+        """
+        根據環境自動選擇策略
         
-        # 等待一段時間確保所有下載完全完成
-        self.logger.info("等待5秒確保所有下載完全完成...")
-        time.sleep(5)
+        優先級：
+        1. 如果在 CI 環境，使用 Cookie 策略
+        2. 如果有本地 Cookie，使用 Cookie 策略
+        3. 如果有帳密，使用本地開發策略（如果不在 CI）
+        4. 否則使用緩存降級策略
+        """
+        is_ci = os.getenv('CI') == 'true' or os.getenv('GITHUB_ACTIONS') == 'true'
+        has_cookies = bool(os.getenv("YINGZAIBIAO_COOKIES")) or Path(YINGZAIBIAO_COOKIES_PATH).exists()
+        has_credentials = bool(os.getenv("YINGZAIBIAO_USERNAME")) and bool(os.getenv("YINGZAIBIAO_PASSWORD"))
+
+        if has_cookies:
+            logger.info("選擇: Cookie 策略")
+            return CookieBasedStrategy(logger)
+
+        if has_credentials and not is_ci:
+            logger.info("選擇: 本地開發策略")
+            return LocalDevelopmentStrategy(logger)
+
+        logger.info("選擇: 緩存降級策略")
+        return CacheLoaderStrategy(logger)
+
+
+# ============================================================================
+# 主下載器類（簡化協調器）
+# ============================================================================
+
+class YingZaiBiaoDownloader:
+    """
+    盈再表下載器 - 簡化版協調器
+    
+    使用策略模式，自動選擇合適的下載方式
+    """
+
+    def __init__(self, logger):
+        self.logger = logger
+
+    def download_and_save(self) -> Tuple[bool, Optional[Path]]:
+        """
+        執行下載
         
-        # 清理 driver
-        self._close_driver()
-        
-        # 返回結果
-        if tw_success or us_success:
-            self.logger.success(f"下載完成 (台股: {'✓' if tw_success else '✗'}, 美股: {'✓' if us_success else '✗'})")
-            return True, None
+        Returns:
+            (是否成功, 說明訊息)
+        """
+        self.logger.info("🚀 開始盈再表下載流程")
+
+        # 判斷環境與憑證
+        is_ci = os.getenv('CI') == 'true' or os.getenv('GITHUB_ACTIONS') == 'true'
+        has_credentials = bool(os.getenv("YINGZAIBIAO_USERNAME")) and bool(os.getenv("YINGZAIBIAO_PASSWORD"))
+
+        # 1st: Cookie 策略（若有 Cookie）
+        strategy = DownloadStrategyFactory.create_strategy(self.logger)
+        with strategy as s:
+            success, message = s.download()
+
+        if success:
+            self.logger.success(f"✅ 盈再表下載成功: {message}")
+            return True, message
+
+        self.logger.warning(f"⚠️ 盈再表下載失敗: {message}")
+
+        # 2nd: 若 Cookie 失效且有帳密且非 CI，嘗試本地登入
+        if (not is_ci) and has_credentials:
+            self.logger.info("嘗試改用帳密登入策略（本地開發）...")
+            try:
+                with LocalDevelopmentStrategy(self.logger) as s2:
+                    success2, message2 = s2.download()
+                if success2:
+                    self.logger.success(f"✅ 盈再表下載成功（帳密登入）: {message2}")
+                    return True, message2
+                self.logger.warning(f"⚠️ 帳密登入策略失敗: {message2}")
+            except Exception as e:
+                self.logger.error(f"帳密登入策略異常: {e}")
+
+        # 3rd: 最後使用快取降級
+        self.logger.info("使用快取降級策略...")
+        with CacheLoaderStrategy(self.logger) as s3:
+            success3, message3 = s3.download()
+        if success3:
+            self.logger.success(f"✅ 使用快取成功: {message3}")
         else:
-            self.logger.error("台股和美股資料都下載失敗")
-            return False, None
+            self.logger.warning(f"⚠️ 快取策略失敗: {message3}")
+
+        return success3, message3
