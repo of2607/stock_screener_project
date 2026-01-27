@@ -208,6 +208,7 @@ class CookieBasedStrategy(YingZaiBiaoStrategy):
         """執行實際下載操作"""
         tw_success = False
         us_success = False
+        jp_success = False
 
         # 下載台股資料
         try:
@@ -233,9 +234,23 @@ class CookieBasedStrategy(YingZaiBiaoStrategy):
         except Exception as e:
             self.logger.error(f"下載美股失敗: {e}")
 
+        # 等待並清理
+        time.sleep(3)
+        self._cleanup_temp_dir()
+
+        # 下載日股資料
+        try:
+            self.logger.info("下載日股資料 (jplist.xlsx)")
+            jp_success = self._download_file(
+                "ctl00_ContentPlaceHolder1_Linkbutton2",
+                "jplist.xlsx"
+            )
+        except Exception as e:
+            self.logger.error(f"下載日股失敗: {e}")
+
         # 最終清理
         self._cleanup_temp_dir()
-        return tw_success or us_success
+        return tw_success or us_success or jp_success
 
     def _download_file(self, button_id: str, filename: str) -> bool:
         """下載單個文件"""
@@ -401,6 +416,7 @@ class LocalDevelopmentStrategy(YingZaiBiaoStrategy):
         """執行下載"""
         tw_success = False
         us_success = False
+        jp_success = False
 
         try:
             self.logger.info("下載台股資料")
@@ -417,8 +433,17 @@ class LocalDevelopmentStrategy(YingZaiBiaoStrategy):
         except Exception as e:
             self.logger.error(f"下載美股失敗: {e}")
 
+        time.sleep(3)
         self._cleanup_temp_dir()
-        return tw_success or us_success
+
+        try:
+            self.logger.info("下載日股資料")
+            jp_success = self._download_file("ctl00_ContentPlaceHolder1_Linkbutton2", "jplist.xlsx")
+        except Exception as e:
+            self.logger.error(f"下載日股失敗: {e}")
+
+        self._cleanup_temp_dir()
+        return tw_success or us_success or jp_success
 
     def _download_file(self, button_id: str, filename: str) -> bool:
         """下載文件"""
@@ -517,7 +542,8 @@ class CacheLoaderStrategy(YingZaiBiaoStrategy):
 
             excel_files = [
                 Path(YINGZAIBIAO_RAW_DIR) / "twlist.xlsx",
-                Path(YINGZAIBIAO_RAW_DIR) / "uslist.xlsx"
+                Path(YINGZAIBIAO_RAW_DIR) / "uslist.xlsx",
+                Path(YINGZAIBIAO_RAW_DIR) / "jplist.xlsx"
             ]
 
             missing_files = []

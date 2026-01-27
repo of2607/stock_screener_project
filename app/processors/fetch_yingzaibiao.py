@@ -59,15 +59,16 @@ class YingZaiBiaoFetcher:
         
         tw_success = False
         us_success = False
+        jp_success = False
         download_success = False
         
         try:
             # ========================================
-            # 步驟 1: 下載台股和美股資料
+            # 步驟 1: 下載台股、美股和日股資料
             # ========================================
             if not skip_download:
                 self.logger.info("=" * 50)
-                self.logger.info("步驟 1: 下載 twlist.xlsx 和 uslist.xlsx")
+                self.logger.info("步驟 1: 下載 twlist.xlsx, uslist.xlsx 和 jplist.xlsx")
                 self.logger.info("=" * 50)
                 
                 download_success, download_msg = self.downloader.download_and_save()
@@ -116,19 +117,35 @@ class YingZaiBiaoFetcher:
                 self.logger.error(f"處理美股資料時發生錯誤: {e}")
             
             # ========================================
+            # 步驟 4: 處理日股資料
+            # ========================================
+            self.logger.info("=" * 50)
+            self.logger.info("步驟 4: 處理日股資料")
+            self.logger.info("=" * 50)
+            
+            try:
+                jp_success = self.processor.process_jp_and_save()
+                if jp_success:
+                    self.logger.success("✅ 日股盈再表資料處理完成")
+                else:
+                    self.logger.warning("⚠️ 日股盈再表資料處理失敗")
+            except Exception as e:
+                self.logger.error(f"處理日股資料時發生錯誤: {e}")
+            
+            # ========================================
             # 總結
             # ========================================
             self.logger.info("=" * 50)
-            if tw_success and us_success:
+            if tw_success and us_success and jp_success:
                 self.logger.success("✅ 盈再表資料完全處理成功")
-            elif tw_success or us_success:
-                self.logger.warning(f"⚠️ 部分完成 (台股: {'✓' if tw_success else '✗'}, 美股: {'✓' if us_success else '✗'})")
+            elif tw_success or us_success or jp_success:
+                self.logger.warning(f"⚠️ 部分完成 (台股: {'✓' if tw_success else '✗'}, 美股: {'✓' if us_success else '✗'}, 日股: {'✓' if jp_success else '✗'})")
             else:
                 self.logger.warning("❌ 盈再表資料處理無結果，但不中斷流程")
             self.logger.info("=" * 50)
             
             # 只要有一個市場成功就視為成功
-            return tw_success or us_success
+            return tw_success or us_success or jp_success
             
         except Exception as e:
             self.logger.error(f"抓取盈再表資料時發生異常: {e}")

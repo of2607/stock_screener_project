@@ -73,6 +73,28 @@ class YingZaiBiaoProcessor:
             '美股盈再表'
         )
     
+    def process_jp_and_save(self) -> bool:
+        """
+        處理日股盈再表資料並儲存為 CSV 和 JSON
+        
+        Returns:
+            是否成功處理
+        """
+        # 取得日股檔案路徑
+        from config.settings import YINGZAIBIAO_RAW_DIR
+        
+        jp_input_path = Path(YINGZAIBIAO_RAW_DIR) / "jplist.xlsx"
+        jp_csv_path = Path(str(YINGZAIBIAO_CSV_PATH).replace('.csv', '_jp.csv'))
+        jp_json_path = Path(str(YINGZAIBIAO_JSON_PATH).replace('.json', '_jp.json'))
+        
+        return self._process_market(
+            jp_input_path,
+            jp_csv_path,
+            jp_json_path,
+            'yingzaibiao_jp',
+            '日股盈再表'
+        )
+    
     def _process_market(
         self, 
         input_path: Path, 

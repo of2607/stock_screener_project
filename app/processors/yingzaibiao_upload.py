@@ -20,6 +20,10 @@ def main():
     # 美股檔案路徑
     us_csv_path = str(tw_csv_path).replace('.csv', '_us.csv')
     us_json_path = str(tw_json_path).replace('.json', '_us.json')
+    
+    # 日股檔案路徑
+    jp_csv_path = str(tw_csv_path).replace('.csv', '_jp.csv')
+    jp_json_path = str(tw_json_path).replace('.json', '_jp.json')
 
     config = {
         "gdrive_as_url": getattr(settings, "GDRIVE_AS_URL", None),
@@ -50,6 +54,15 @@ def main():
     # 上傳美股資料
     print("\n=== 上傳美股資料 ===")
     for fpath in [us_csv_path, us_json_path]:
+        if os.path.isfile(fpath):
+            print(f"  上傳 {fpath} ...")
+            upload(fpath, targets, config)
+        else:
+            print(f"  檔案不存在：{fpath}")
+    
+    # 上傳日股資料
+    print("\n=== 上傳日股資料 ===")
+    for fpath in [jp_csv_path, jp_json_path]:
         if os.path.isfile(fpath):
             print(f"  上傳 {fpath} ...")
             upload(fpath, targets, config)
