@@ -333,6 +333,66 @@ class MetricCalculator:
             return round((eps_now - eps_prev) / abs(eps_prev) * 100, 2)
         else:
             return np.nan
+    
+    def _parse_season(self, season_str: str) -> tuple:
+        """解析季度字串，回傳 (year, quarter_index)
+        例如：'114Q3' -> (114, 2)，其中 quarter_index: Q1=0, Q2=1, Q3=2, Q4=3
+        """
+        year = int(season_str[:3])
+        quarter = season_str[3:]
+        q_idx = {"Q1": 0, "Q2": 1, "Q3": 2, "Q4": 3}.get(quarter, 0)
+        return (year, q_idx)
+
+    def _season_to_str(self, year: int, q_idx: int) -> str:
+        """將 (year, quarter_index) 轉換為季度字串
+        例如：(114, 2) -> '114Q3'
+        """
+        quarters = ["Q1", "Q2", "Q3", "Q4"]
+        return f"{year}{quarters[q_idx]}"
+
+    def _generate_past_seasons(self, latest_season: str, count: int) -> List[str]:
+        """從指定季度往回生成N個過去季度
+        參數：
+            latest_season: 最新季度，例如 '114Q4'
+            count: 要生成的季度數量
+        回傳：
+            季度列表，由新到舊，例如 ['114Q4', '114Q3', '114Q2', ...]
+        """
+        year, q_idx = self._parse_season(latest_season)
+        result = []
+        
+        for _ in range(count):
+            result.append(self._season_to_str(year, q_idx))
+            q_idx -= 1
+            if q_idx < 0:
+                q_idx = 3
+                year -= 1
+        
+        return result
+
+    def _get_latest_published_season(self, eps_lookup: Dict, years: List[str], sample_codes: List[str]) -> str:
+        """自動偵測最新已公布的季度
+        參數：
+            eps_lookup: EPS lookup 字典
+            years: 年度列表（由新到舊）
+            sample_codes: 樣本股票代碼列表（用於檢查）
+        回傳：
+            最新已公布的季度字串，例如 '114Q4'
+        """
+        # 從最新年度開始，往前檢查每個季度
+        for year in years[:2]:  # 只檢查最近兩年
+            for q in reversed(self.quarters):  # Q4, Q3, Q2, Q1
+                # 檢查是否有足夠的股票有此季度的數據
+                count = sum(1 for code in sample_codes[:50] 
+                           if not pd.isna(eps_lookup.get((code, year, q), np.nan)))
+                # 如果超過20%的樣本股票有數據，視為已公布
+                if count > len(sample_codes[:50]) * 0.2:
+                    return f"{year}{q}"
+        
+        # 若無法判斷，回退至前一年Q4
+        prev_year = str(int(years[0]) - 1)
+        return f"{prev_year}Q4"
+    
     def __init__(self, quarters: List[str]):
         self.quarters = quarters
 
@@ -481,15 +541,22 @@ class MetricCalculator:
             row["近3年平均配息率"] = avg_last_n(payout_years[1:], 3)
             row["近5年平均配息率"] = avg_last_n(payout_years[1:], 5)
             row["近8年平均配息率"] = avg_last_n(payout_years[1:], 8)
-            # 取得所有可用的年度與季別，組成完整的季序列（新到舊）
-            all_seasons = [f"{y}{q}" for y in years for q in reversed(self.quarters)]
-            # 近八季逐季EPS（顯示累計值）
-            for season in reversed(all_seasons[1:9]):
+            
+            # === 修正：自動偵測最新已公布季度，並生成正確的過去季度序列 ===
+            # 取得樣本代碼用於判斷最新季度
+            sample_codes = list(all_codes[:100]) if len(all_codes) > 0 else []
+            latest_season = self._get_latest_published_season(eps_lookup_cache, years, sample_codes)
+            # 生成足夠的過去季度（最多需要12季：8季顯示 + 4季前年同期）
+            all_past_seasons = self._generate_past_seasons(latest_season, 12)
+            
+            # 近八季逐季EPS（顯示累計值）- 從最新季度往回推8季
+            for season in all_past_seasons[:8]:
                 y, q = season[:3], season[3:]
                 eps = eps_lookup_cache.get((code, y, q), np.nan)
                 row[f"{season}_EPS"] = eps
-            # 近四季逐季EPS與前同期EPS差率（不含當季）
-            for season in reversed(all_seasons[1:5]):
+            
+            # 近四季逐季EPS與前同期EPS差率 - 從最新季度往回推4季
+            for season in all_past_seasons[:4]:
                 y, q = season[:3], season[3:]
                 eps_now = eps_lookup_cache.get((code, y, q), np.nan)
                 y_prev = str(int(y) - 1) if y.isdigit() else ''
@@ -497,18 +564,28 @@ class MetricCalculator:
                 row[f"{y}{q}_EPS"] = eps_now
                 row[f"{y_prev}{q}_EPS"] = eps_prev
                 row[f"{y}{q}_vs_{y_prev}{q}_EPS差率"] = self.calc_eps_diff_rate(eps_lookup_cache, code, y, q)
-            # 近四季EPS總合（放最後）
-            last_5_seasons_sorted = sorted(all_seasons[1:6], key=lambda s: (int(s[:3]), {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}.get(s[3:], 0)))
-            eps_4q = self.calc_single_quarter_eps(eps_lookup_cache, code, last_5_seasons_sorted)
+            
+            # 近四季EPS總合 - 取最新的連續4季，按時間順序排列
+            last_4_seasons = all_past_seasons[:4]
+            last_4_seasons_sorted = sorted(last_4_seasons, key=lambda s: (int(s[:3]), {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}.get(s[3:], 0)))
+            eps_4q = self.calc_single_quarter_eps(eps_lookup_cache, code, last_4_seasons_sorted)
             row["近四季EPS總合"] = round(np.nansum(eps_4q), 2) if any([not pd.isna(e) for e in eps_4q]) else np.nan
             
-            # 近四季EPS總合vs前一年度EPS差率
+            # 近四季EPS總合vs前年度EPS差率 - 修正比較基準
             recent_4q_eps = row.get("近四季EPS總合", np.nan)
-            if len(years) > 1:
-                prev_year = years[1]  # 前一年度（years[0]是最新年度）
-                prev_year_eps = row.get(f"{prev_year}EPS_年度", np.nan)
-                if not pd.isna(recent_4q_eps) and not pd.isna(prev_year_eps) and prev_year_eps != 0:
-                    diff_rate = round((recent_4q_eps - prev_year_eps) / abs(prev_year_eps) * 100, 2)
+            # 判斷近四季所屬的年度，並與前一年度比較
+            if last_4_seasons_sorted:
+                # 取最新一季的年度
+                recent_year = last_4_seasons_sorted[-1][:3]
+                # 前一年度
+                compare_year = str(int(recent_year) - 1) if recent_year.isdigit() else (years[1] if len(years) > 1 else None)
+                
+                if compare_year:
+                    compare_year_eps = row.get(f"{compare_year}EPS_年度", np.nan)
+                    if not pd.isna(recent_4q_eps) and not pd.isna(compare_year_eps) and compare_year_eps != 0:
+                        diff_rate = round((recent_4q_eps - compare_year_eps) / abs(compare_year_eps) * 100, 2)
+                    else:
+                        diff_rate = np.nan
                 else:
                     diff_rate = np.nan
             else:
