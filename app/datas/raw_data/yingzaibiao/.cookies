@@ -1,47 +1,47 @@
 [
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1804520909,
+    "expiry": 1804999968,
     "httpOnly": false,
     "name": "_ga_7M0W0LCZ4F",
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "GS2.1.s1769960879$o1$g1$t1769960909$j30$l0$h0"
+    "value": "GS2.1.s1770439937$o1$g1$t1770439968$j29$l0$h0"
   },
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1801496902,
+    "expiry": 1801975959,
     "httpOnly": false,
     "name": "FCOEC",
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "%5B%5B%5B28%2C%22%5Bnull%2C%5Bnull%2C1%2C%5B1769960902%2C278799000%5D%2C0%5D%5D%22%5D%5D%5D"
+    "value": "%5B%5B%5B28%2C%22%5Bnull%2C%5Bnull%2C1%2C%5B1770439959%2C887241000%5D%2C0%5D%5D%22%5D%5D%5D"
   },
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1803656911,
+    "expiry": 1804135970,
     "httpOnly": false,
     "name": "FCCDCF",
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "%5Bnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B32%2C%22%5B%5C%22669acd70-5a71-4137-b754-0b98a79875e9%5C%22%2C%5B1769960880%2C391000000%5D%5D%22%5D%5D%5D"
+    "value": "%5Bnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B32%2C%22%5B%5C%2267fc3644-2601-4ba5-8f9e-48746d187d19%5C%22%2C%5B1770439938%2C351000000%5D%5D%22%5D%5D%5D"
   },
   {
     "domain": "stocks.ddns.net",
-    "expiry": 1770220099,
+    "expiry": 1770699157,
     "httpOnly": true,
     "name": ".ASPXAUTH",
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "E52ED5B20220D3DF27E74A2A790EFD585E417382F864EC54FCBF2E1269EC4F730BCEB91FCAE5EB43EAEEA65C8A7E5E7C55484D79C0270877E243FD84CD73F542569C71FE5887FC83D8594849F2DB458619C5B086BCF568E66AF2E3CDC80848FE22D396D702F361198BFA78E3031A13F43BAEDED7635448AA31FB977EE82149AEC86E0AFA6EEE05D14E3FCFCD3A35516CE19BE1D267106BC008250B34AAF4BC4A"
+    "value": "D102AF9571948DA05E9E472207E9F4C66CACAF162EC21F16121A2A2D1C99102672E7958039EF7119FFDC1579C6DF31862EACCF8622E8E6980E3D75AD21B26058F3A16CAE7AE2872162E3FE1008F9A6469D07C9E351E0D5AC4AF10E9F5F92A8658F205BCDAF9C251AF7EA90736C5D22F46AAFC3B67591F35FD628CFCFF5D9755D8CBC31CD6B95BCD2E6EEC2FDD654BA39EEAFCF43C94140D54ABA48B058AF9867"
   },
   {
     "domain": "stocks.ddns.net",
-    "expiry": 1770565699,
+    "expiry": 1771044757,
     "httpOnly": true,
     "name": "LastLoggedUser",
     "path": "/",
@@ -51,53 +51,53 @@
   },
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1803656879,
+    "expiry": 1804135937,
     "httpOnly": false,
     "name": "__gpi",
     "path": "/",
     "sameSite": "None",
     "secure": true,
-    "value": "UID=000011effeb76603:T=1769960879:RT=1769960879:S=ALNI_Maj0-kec3yfTYqeyBiEFSQBaFbcbg"
+    "value": "UID=000011f56b219235:T=1770439937:RT=1770439937:S=ALNI_MZAv70GzKcS_8fvdbaNUvaaR1w3ew"
   },
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1803656879,
+    "expiry": 1804135937,
     "httpOnly": false,
     "name": "__gads",
     "path": "/",
     "sameSite": "None",
     "secure": true,
-    "value": "ID=458c3bb31e34ce23:T=1769960879:RT=1769960879:S=ALNI_Maoi5-mmdCd0qgg4qUE8umMSWM9Vw"
+    "value": "ID=6e18e36032592845:T=1770439937:RT=1770439937:S=ALNI_MZZkrk2ir1JToFDceDV0tJkoGlF0w"
   },
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1801496911,
+    "expiry": 1801975970,
     "httpOnly": false,
     "name": "FCNEC",
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "%5B%5B%22AKsRol-KLjdoET5s6qDKV_9CJTd4bgqRszNopAL7XZFckzC6JPet0Q8oFDevS4ZbuTLdyGmricRpB3vWETrK-O0OR72es6zUAlXz4uQytBlXC5c_r_JZInBofqHbzHCNrF26Biqkb1y1BquYG8E1KMz535z5IAaRnw%3D%3D%22%5D%5D"
+    "value": "%5B%5B%22AKsRol8HiQGJ9SJdeTvthll49lZUleRkL-Z4qqiRxIzgluf1TDs2OP2fV1iNgGI8ngDMcnODKSoJlIRQCMjs8cdLtzORMzn_SgLoU-J6vTeuJ8PyAIBAD16SvqWNIdWUAOp7xncWwA-XtdojdO7kKlSFo7A-X76oig%3D%3D%22%5D%5D"
   },
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1804520909,
+    "expiry": 1804999968,
     "httpOnly": false,
     "name": "_ga",
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "GA1.3.2144779048.1769960880"
+    "value": "GA1.3.520321589.1770439938"
   },
   {
     "domain": ".stocks.ddns.net",
-    "expiry": 1770047309,
+    "expiry": 1770526368,
     "httpOnly": false,
     "name": "_gid",
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "GA1.3.1318612620.1769960880"
+    "value": "GA1.3.663831951.1770439938"
   },
   {
     "domain": "stocks.ddns.net",
@@ -106,6 +106,6 @@
     "path": "/",
     "sameSite": "Lax",
     "secure": false,
-    "value": "iach1wddb2ffv3nlvtlfxeyk"
+    "value": "5f3pd0k01hglfyzfvw01rps2"
   }
 ]
