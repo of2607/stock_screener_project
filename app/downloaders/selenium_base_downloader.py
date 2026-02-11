@@ -259,15 +259,14 @@ class SeleniumBaseDownloader(BaseDownloader):
             
             for cookie in cookies:
                 try:
-                    # 修正：只移除 domain 和 expiry，保留 secure/sameSite/httpOnly 等重要屬性
-                    # 移除 domain 以避免跨域或子域名匹配問題 (selenium 會自動設為當前 domain)
-                    # 移除 expiry 以防止因時間差或已過期導致寫入失敗 (變成 session cookie)
+                    # 移除 domain 和 expiry (Selenium 會自動處理)
                     cookie.pop('domain', None)
                     cookie.pop('expiry', None)
-
-                    # 如果當前是 HTTP 環境但 cookie 要求 Secure，則強制移除 Secure
-                    # (但在 production 通常是 HTTPS，所以保留 Secure 是正確的)
-                    # 這裡為了保險起見，如果是因為環境問題導致寫入失敗，selenium 通常會報錯
+                    
+                    # CI 環境強制移除 secure 屬性（避免 HTTP/HTTPS 衝突）
+                    if os.getenv('CI') == 'true' or os.getenv('GITHUB_ACTIONS') == 'true':
+                        cookie.pop('secure', None)
+                        self.logger.debug(f"CI 環境: 移除 cookie '{cookie.get('name')}' 的 secure 屬性")
                     
                     self.driver.add_cookie(cookie)
                     loaded_count += 1

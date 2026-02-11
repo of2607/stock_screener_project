@@ -146,7 +146,9 @@ class CookieBasedStrategy(YingZaiBiaoStrategy):
             self.logger.debug(f"訪問網站根目錄以建立 Domain Context: {base_url}")
             try:
                 self.driver.get(base_url)
-                time.sleep(3)
+                # CI 環境需要更長的載入時間
+                wait_time = 5 if (os.getenv('CI') == 'true' or os.getenv('GITHUB_ACTIONS') == 'true') else 3
+                time.sleep(wait_time)
             except Exception as e:
                 return False, f"無法訪問網站: {e}"
 
@@ -180,6 +182,10 @@ class CookieBasedStrategy(YingZaiBiaoStrategy):
             self.logger.debug(f"當前驗證 URL: {current_url}")
             
             if current_url and "login.aspx" in current_url.lower():
+                # 增強錯誤診斷
+                self.logger.error(f"Cookie 已過期或無效，被重導向到: {current_url}")
+                loaded_cookies = {c['name']: c.get('value', '')[:20] + '...' for c in self.driver.get_cookies()}
+                self.logger.debug(f"當前瀏覽器 Cookies 狀態: {loaded_cookies}")
                 return False, "Cookie 已過期，無法進入下載頁面"
 
             # 檢查下載按鈕

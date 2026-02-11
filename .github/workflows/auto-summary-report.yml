@@ -29,6 +29,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Verify cookies secret
+        run: |
+          if [ -z "$YINGZAIBIAO_COOKIES" ]; then
+            echo "❌ YINGZAIBIAO_COOKIES secret is not set"
+            exit 1
+          else
+            echo "✅ YINGZAIBIAO_COOKIES secret exists"
+            echo "Secret length: ${#YINGZAIBIAO_COOKIES}"
+          fi
+        env:
+          YINGZAIBIAO_COOKIES: ${{ secrets.YINGZAIBIAO_COOKIES }}
+
+      - name: Install Chrome dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+
       - name: Run summary report
         run: |
           python main.py --ENABLE_YINGZAIBIAO_DOWNLOAD=True --UPLOAD_YINGZAIBIAO=True --ENABLE_DOWNLOAD_REPORTS=False --ENABLE_MERGE_REPORTS=False --ENABLE_SUMMARY_REPORT=True --UPLOAD_SUMMARY_REPORT=True
