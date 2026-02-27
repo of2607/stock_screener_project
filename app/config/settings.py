@@ -20,16 +20,16 @@ SEASONS: List[str] = ["01", "02", "03", "04"]
 DOWNLOAD_REPORTS: List[str] = ['all']  # 處理所有報表類型
 SAVE_FORMAT: List[str] = ['csv', 'json']  # 可為 ['csv'], ['json'], ['csv', 'json']
 # 孰史資料處理選項
-ENABLE_DOWNLOAD_REPORTS: bool = False # 是否下載報表資料
-ENABLE_MERGE_REPORTS: bool = False # 是否合併報表資料
-ENABLE_PRECOMPUTE_METRICS: bool = False # 是否預計算長表
+ENABLE_DOWNLOAD_REPORTS: bool = True # 是否下載報表資料
+ENABLE_MERGE_REPORTS: bool = True # 是否合併報表資料
+ENABLE_PRECOMPUTE_METRICS: bool = True # 是否預計算長表
 # 總表 (含最新股價)
 ENABLE_SUMMARY_REPORT: bool = True # 是否自動產生彙總報表
 UPLOAD_SUMMARY_REPORT: bool = True # 是否上傳自動產生的彙總報表
 UPLOAD_SUMMARY_REPORT_TARGET: List[str] = ["all"]  # r2, gdrive, supabase
-# 盈再表
-ENABLE_YINGZAIBIAO_DOWNLOAD: bool = True # 是否下載盈再表資料
-UPLOAD_YINGZAIBIAO: bool = True # 是否上傳盈再表資料
+# 盈再表 (轉到Doris的盈再表資料)
+ENABLE_YINGZAIBIAO_DOWNLOAD: bool = False # 是否下載盈再表資料
+UPLOAD_YINGZAIBIAO: bool = False # 是否上傳盈再表資料
 UPLOAD_YINGZAIBIAO_TARGET: List[str] = ["all"]  # r2, gdrive, supabase
 
 # =========================

@@ -378,5 +378,25 @@
       "json": "datas/merged_data/json/latest_stock_prices.json"
     },
     "total_rows": 27121
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2026-02-27T14:39:46",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 28437
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2026-02-27T21:41:36",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 28437
   }
 ]
