@@ -140,10 +140,12 @@ class DataLoader:
         eps_df = self._build_eps_df_from_metrics(metrics_df, extended_years)
         bs_df = self._build_bs_df_from_metrics(metrics_df, extended_years)
         div_df = self._build_div_df_from_metrics(metrics_df, years)
+        dividend_period_df = self._collect_yearly_data("dividend", extended_years)
         
         return {
             "eps_df": eps_df,
             "div_df": div_df,
+            "dividend_period_df": dividend_period_df,
             "bs_df": bs_df,
             "price_map": self._get_latest_price_map(),
             "lookups": lookups,  # 新增直接返回 lookups，優化性能
@@ -200,6 +202,17 @@ class DataLoader:
         
         return df[["代號", "年度", "季別", "現金股利"]].copy()
 
+    def _build_dividend_period_df_from_metrics(self, metrics_df: pd.DataFrame, years: List[str]) -> pd.DataFrame:
+        """從長表構建 dividend_period_df（保留原始季別/期間）"""
+        df = metrics_df[metrics_df["year"].astype(str).isin(years)].copy()
+        df = df.rename(columns={
+            "code": "代號",
+            "year": "年度",
+            "quarter": "季別",
+            "cash_dividend": "現金股利",
+        })
+        return df[["代號", "年度", "季別", "現金股利"]].copy()
+
     def _load_from_original(self, years: List[str]) -> Dict[str, pd.DataFrame]:
         """原有的數據載入方式（備選路徑）"""
         # 為了計算 ROE（需要前一年 Q4 作為期初），自動加入最早年份的前一年
@@ -213,6 +226,7 @@ class DataLoader:
         return {
             "eps_df": self._collect_yearly_data("income_statement", extended_years),
             "div_df": self._collect_yearly_data("dividend", years),  # 股利不需要前一年
+            "dividend_period_df": self._collect_yearly_data("dividend", extended_years),
             "bs_df": self._collect_yearly_data("balance_sheet", extended_years),  # 資產負債需要前一年 Q4
             "price_map": self._get_latest_price_map(),
         }
@@ -302,6 +316,96 @@ class LookupBuilder:
             key = (row.get("代號"), row.get("年度"), row.get("季別"))
             lookup[key] = safe_float(row.get("權益總計"))
         return lookup
+
+
+class DividendPeriodResolver:
+    def _get_period_kind(self, period: str) -> str:
+        if not period or pd.isna(period):
+            return "other"
+        period = str(period).strip().upper()
+        if period == "Y1":
+            return "year"
+        if period in ["H1", "H2"]:
+            return "half"
+        if period in ["Q1", "Q2", "Q3", "Q4"]:
+            return "quarter"
+        if period.startswith("M") and period[1:].isdigit():
+            return "month"
+        return "other"
+
+    def _get_period_order(self, period: str) -> int:
+        if not period or pd.isna(period):
+            return 0
+        period = str(period).strip().upper()
+        if period == "Y1":
+            return 99
+        if period == "H1":
+            return 1
+        if period == "H2":
+            return 2
+        if period in ["Q1", "Q2", "Q3", "Q4"]:
+            return int(period[1:])
+        if period.startswith("M") and period[1:].isdigit():
+            return int(period[1:])
+        return 0
+
+    def build_lookup(self, dividend_period_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        if dividend_period_df.empty:
+            return {}
+
+        df = dividend_period_df.copy()
+        code_col = "代號" if "代號" in df.columns else "code"
+        year_col = "年度" if "年度" in df.columns else "year"
+        period_col = "季別" if "季別" in df.columns else "quarter"
+        cash_col = "現金股利" if "現金股利" in df.columns else "cash_dividend"
+
+        required_cols = [code_col, year_col, period_col, cash_col]
+        if not all(col in df.columns for col in required_cols):
+            return {}
+
+        df = df[required_cols].copy()
+        df = df.rename(columns={
+            code_col: "代號",
+            year_col: "年度",
+            period_col: "季別",
+            cash_col: "現金股利",
+        })
+        df["代號"] = df["代號"].astype(str).str.strip()
+        df["季別"] = df["季別"].astype(str).str.strip().str.upper()
+        df["現金股利"] = df["現金股利"].apply(safe_float)
+        df = df.dropna(subset=["代號", "年度", "季別", "現金股利"])
+        df["year_int"] = pd.to_numeric(df["年度"], errors="coerce")
+        df = df.dropna(subset=["year_int"])
+        df["year_int"] = df["year_int"].astype(int)
+        df["period_kind"] = df["季別"].apply(self._get_period_kind)
+        df["period_order"] = df["季別"].apply(self._get_period_order)
+
+        df = df.groupby(["代號", "year_int", "季別", "period_kind", "period_order"], as_index=False).agg({
+            "現金股利": "max",
+        })
+
+        granularity_rank = {"month": 3, "quarter": 2, "half": 1, "year": 0, "other": -1}
+        df["granularity_rank"] = df["period_kind"].map(granularity_rank).fillna(-1)
+        df["max_rank"] = df.groupby(["代號", "year_int"])["granularity_rank"].transform("max")
+        df = df[df["granularity_rank"] == df["max_rank"]]
+
+        lookup = {}
+        for code, sub in df.groupby("代號"):
+            sub_sorted = sub.sort_values(by=["year_int", "period_order"], ascending=[False, False]).copy()
+            lookup[str(code)] = sub_sorted
+        return lookup
+
+    def calc_trailing_dividend(self, period_rows: pd.DataFrame) -> Dict[str, Any]:
+        if period_rows is None or period_rows.empty:
+            return {"method": "", "trailing_sum": np.nan}
+
+        latest_kind = period_rows.iloc[0]["period_kind"]
+        method_map = {"year": "年配", "half": "半年配", "quarter": "季配", "month": "月配", "other": "其他"}
+        target_count = {"year": 1, "half": 2, "quarter": 4, "month": 12, "other": 1}.get(latest_kind, 1)
+
+        same_kind_rows = period_rows[period_rows["period_kind"] == latest_kind].head(target_count)
+        trailing_sum = round(same_kind_rows["現金股利"].sum(), 2) if not same_kind_rows.empty else np.nan
+        return {"method": method_map.get(latest_kind, ""), "trailing_sum": trailing_sum}
 
 class MetricCalculator:
     def calc_single_quarter_eps(self, eps_lookup, code, seasons_sorted):
@@ -422,8 +526,15 @@ class MetricCalculator:
             return round(float(cash_div) / float(price) * 100, 2)
         except Exception:
             return np.nan
-
-    def calculate(self, lookups: Dict[str, Dict], data: Dict[str, pd.DataFrame], years: List[str], stock_names: Dict[str, str] = None) -> List[Dict]:
+    def calculate(
+        self,
+        lookups: Dict[str, Dict],
+        data: Dict[str, pd.DataFrame],
+        years: List[str],
+        stock_names: Dict[str, str] = None,
+        dividend_period_lookup: Optional[Dict[str, pd.DataFrame]] = None,
+        dividend_resolver: Optional[DividendPeriodResolver] = None,
+    ) -> List[Dict]:
         eps_df, div_df, bs_df, price_map = data["eps_df"], data["div_df"], data["bs_df"], data["price_map"]
         eps_lookup, profit_lookup, equity_lookup = lookups["eps_lookup"], lookups["profit_lookup"], lookups["equity_lookup"]
         
@@ -477,6 +588,9 @@ class MetricCalculator:
         equity_lookup_cache = equity_lookup
         price_map_cache = price_map
         dividend_lookup_cache = dividend_lookup
+        if dividend_resolver is None:
+            dividend_resolver = DividendPeriodResolver()
+        dividend_period_lookup = dividend_period_lookup or {}
         
         def avg_last_n(lst, n):
             vals = [v for v in lst[:n] if not pd.isna(v)]
@@ -507,6 +621,11 @@ class MetricCalculator:
             price = safe_float(price)
             row["收盤價"] = price
             row["收盤日"] = close_date
+            period_rows = dividend_period_lookup.get(str(code))
+            trailing_info = dividend_resolver.calc_trailing_dividend(period_rows)
+            row["配股方式"] = trailing_info["method"]
+            row["近一年股利"] = trailing_info["trailing_sum"]
+            row["近一年股利值利率"] = self.calc_div_yield(trailing_info["trailing_sum"], price)
             eps_years, div_years, yield_years, roe_years, payout_years = [], [], [], [], []
             year_col = "年度" if "年度" in div_df.columns else "year"
             cash_div_col = "現金股利" if "現金股利" in div_df.columns else "cash_dividend"
@@ -601,7 +720,7 @@ class ReportAssembler:
         df_report = pd.DataFrame(metrics)
         # 重新排序欄位：股票代號、股票名稱、收盤價、收盤日、逐年 EPS/現金股利/殖利率/ROE
         cols = list(df_report.columns)
-        priority = ["股票代號", "股票名稱", "收盤價", "收盤日"]
+        priority = ["股票代號", "股票名稱", "收盤價", "收盤日", "配股方式", "近一年股利", "近一年股利值利率"]
         # 取得所有年度（如 '113', '112', ...）
         year_set = set()
         for row in metrics:
@@ -702,7 +821,16 @@ class SummaryReportGenerator:
         # 準備股票名稱對照表（優先從 latest_stock_prices.csv 取得）
         stock_names = self.data_loader._get_stock_names_from_price_file()
         
-        metrics = self.metric_calculator.calculate(lookups, data, years, stock_names)
+        dividend_resolver = DividendPeriodResolver()
+        dividend_period_lookup = dividend_resolver.build_lookup(data.get("dividend_period_df", pd.DataFrame()))
+        metrics = self.metric_calculator.calculate(
+            lookups,
+            data,
+            years,
+            stock_names,
+            dividend_period_lookup=dividend_period_lookup,
+            dividend_resolver=dividend_resolver,
+        )
         df_report = self.report_assembler.assemble(metrics)
         self.report_exporter.export(
             df_report,
