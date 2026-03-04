@@ -684,18 +684,18 @@ class MetricCalculator:
                 row[f"{y_prev}{q}_EPS"] = eps_prev
                 row[f"{y}{q}_vs_{y_prev}{q}_EPS差率"] = self.calc_eps_diff_rate(eps_lookup_cache, code, y, q)
             
-            # 近四季EPS總合 - 取最新的連續4季，按時間順序排列
-            last_4_seasons = all_past_seasons[:4]
-            last_4_seasons_sorted = sorted(last_4_seasons, key=lambda s: (int(s[:3]), {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}.get(s[3:], 0)))
-            eps_4q = self.calc_single_quarter_eps(eps_lookup_cache, code, last_4_seasons_sorted)
+            # 近四季EPS總合 - 需多取1季作為單季換算基準（5季累計 -> 4季單季）
+            last_5_seasons = all_past_seasons[:5]
+            last_5_seasons_sorted = sorted(last_5_seasons, key=lambda s: (int(s[:3]), {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}.get(s[3:], 0)))
+            eps_4q = self.calc_single_quarter_eps(eps_lookup_cache, code, last_5_seasons_sorted)
             row["近四季EPS總合"] = round(np.nansum(eps_4q), 2) if any([not pd.isna(e) for e in eps_4q]) else np.nan
             
             # 近四季EPS總合vs前年度EPS差率 - 修正比較基準
             recent_4q_eps = row.get("近四季EPS總合", np.nan)
             # 判斷近四季所屬的年度，並與前一年度比較
-            if last_4_seasons_sorted:
+            if last_5_seasons_sorted:
                 # 取最新一季的年度
-                recent_year = last_4_seasons_sorted[-1][:3]
+                recent_year = last_5_seasons_sorted[-1][:3]
                 # 前一年度
                 compare_year = str(int(recent_year) - 1) if recent_year.isdigit() else (years[1] if len(years) > 1 else None)
                 
@@ -743,7 +743,7 @@ class ReportAssembler:
             nan_df = pd.DataFrame(np.nan, index=df_report.index, columns=missing_cols)
             df_report = pd.concat([df_report, nan_df], axis=1)
         # 其他欄位自動排後，並將「近四季EPS總合」及其差率移到最後
-        special_cols = ["近四季EPS總合", "近四季EPS總合vs前一年度EPS差率"]
+        special_cols = ["近四季EPS總合", "近四季_vs_前年度_EPS差率"]
         others = [c for c in df_report.columns if c not in priority + year_cols + special_cols]
         final_special = [c for c in special_cols if c in df_report.columns]
         df_report = df_report[priority + year_cols + others + final_special]
