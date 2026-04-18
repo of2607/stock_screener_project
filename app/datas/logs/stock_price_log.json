@@ -958,5 +958,15 @@
       "json": "datas/merged_data/json/latest_stock_prices.json"
     },
     "total_rows": 26593
+  },
+  {
+    "year": "current",
+    "report": "stock_prices",
+    "timestamp": "2026-04-18T18:25:36",
+    "files": {
+      "csv": "datas/merged_data/csv/latest_stock_prices.csv",
+      "json": "datas/merged_data/json/latest_stock_prices.json"
+    },
+    "total_rows": 26849
   }
 ]
