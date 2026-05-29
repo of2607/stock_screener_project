@@ -9938,5 +9938,25 @@
       "json": "datas/merged_data/json/115-etf_dividend.json"
     },
     "total_rows": 201
+  },
+  {
+    "year": "114",
+    "report": "etf_dividend",
+    "timestamp": "2026-05-29T18:59:03",
+    "files": {
+      "csv": "datas/merged_data/csv/114-etf_dividend.csv",
+      "json": "datas/merged_data/json/114-etf_dividend.json"
+    },
+    "total_rows": 574
+  },
+  {
+    "year": "115",
+    "report": "etf_dividend",
+    "timestamp": "2026-05-29T18:59:04",
+    "files": {
+      "csv": "datas/merged_data/csv/115-etf_dividend.csv",
+      "json": "datas/merged_data/json/115-etf_dividend.json"
+    },
+    "total_rows": 201
   }
 ]
