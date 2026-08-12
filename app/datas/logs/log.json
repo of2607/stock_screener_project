@@ -16518,5 +16518,105 @@
       "json": "datas/merged_data/json/115-etf_dividend.json"
     },
     "total_rows": 331
+  },
+  {
+    "year": "114",
+    "report": "balance_sheet",
+    "timestamp": "2026-08-12T18:57:42",
+    "files": {
+      "csv": "datas/merged_data/csv/114-balance_sheet.csv",
+      "json": "datas/merged_data/json/114-balance_sheet.json"
+    },
+    "total_rows": 7836
+  },
+  {
+    "year": "115",
+    "report": "balance_sheet",
+    "timestamp": "2026-08-12T18:59:06",
+    "files": {
+      "csv": "datas/merged_data/csv/115-balance_sheet.csv",
+      "json": "datas/merged_data/json/115-balance_sheet.json"
+    },
+    "total_rows": 3084
+  },
+  {
+    "year": "114",
+    "report": "income_statement",
+    "timestamp": "2026-08-12T19:03:09",
+    "files": {
+      "csv": "datas/merged_data/csv/114-income_statement.csv",
+      "json": "datas/merged_data/json/114-income_statement.json"
+    },
+    "total_rows": 7849
+  },
+  {
+    "year": "115",
+    "report": "income_statement",
+    "timestamp": "2026-08-12T19:04:30",
+    "files": {
+      "csv": "datas/merged_data/csv/115-income_statement.csv",
+      "json": "datas/merged_data/json/115-income_statement.json"
+    },
+    "total_rows": 3084
+  },
+  {
+    "year": "114",
+    "report": "cash_flow",
+    "timestamp": "2026-08-12T19:06:06",
+    "files": {
+      "csv": "datas/merged_data/csv/114-cash_flow.csv",
+      "json": "datas/merged_data/json/114-cash_flow.json"
+    },
+    "total_rows": 7849
+  },
+  {
+    "year": "115",
+    "report": "cash_flow",
+    "timestamp": "2026-08-12T19:06:51",
+    "files": {
+      "csv": "datas/merged_data/csv/115-cash_flow.csv",
+      "json": "datas/merged_data/json/115-cash_flow.json"
+    },
+    "total_rows": 3084
+  },
+  {
+    "year": "114",
+    "report": "dividend",
+    "timestamp": "2026-08-12T19:07:05",
+    "files": {
+      "csv": "datas/merged_data/csv/114-dividend.csv",
+      "json": "datas/merged_data/json/114-dividend.json"
+    },
+    "total_rows": 2266
+  },
+  {
+    "year": "115",
+    "report": "dividend",
+    "timestamp": "2026-08-12T19:07:12",
+    "files": {
+      "csv": "datas/merged_data/csv/115-dividend.csv",
+      "json": "datas/merged_data/json/115-dividend.json"
+    },
+    "total_rows": 152
+  },
+  {
+    "year": "114",
+    "report": "etf_dividend",
+    "timestamp": "2026-08-12T19:07:16",
+    "files": {
+      "csv": "datas/merged_data/csv/114-etf_dividend.csv",
+      "json": "datas/merged_data/json/114-etf_dividend.json"
+    },
+    "total_rows": 704
+  },
+  {
+    "year": "115",
+    "report": "etf_dividend",
+    "timestamp": "2026-08-12T19:07:17",
+    "files": {
+      "csv": "datas/merged_data/csv/115-etf_dividend.csv",
+      "json": "datas/merged_data/json/115-etf_dividend.json"
+    },
+    "total_rows": 331
   }
 ]
