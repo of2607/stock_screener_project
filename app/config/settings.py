@@ -70,7 +70,7 @@ GDRIVE_AUTO_CONVERT_TO_SHEETS: bool = True  # 是否自動將 CSV 轉換為 Goog
 GDRIVE_KEEP_CSV_BACKUP: bool = True  # 是否保留原始 CSV 備份
 # Supabase 設定 ( supabase@of2607 )
 SUPABASE_URL: str = "https://btzjjozytwtbgdznralj.supabase.co"
-SUPABASE_KEY: str = "sb_secret_fjzIJ8cx3xnsE8xQ18-AMw_ctrb8gkD"
+SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
 SUPABASE_BUCKET: str = "public-data/reports"
 # Cloudflare R2 設定 ( cloudflare@of2607 )
 R2_ACCOUNT_ID: str = "67d73f06307398dd3a9f766976a5efec"

@@ -53,6 +53,7 @@ jobs:
           YINGZAIBIAO_USERNAME: ${{ secrets.YINGZAIBIAO_USERNAME }}
           YINGZAIBIAO_PASSWORD: ${{ secrets.YINGZAIBIAO_PASSWORD }}
           YINGZAIBIAO_COOKIES: ${{ secrets.YINGZAIBIAO_COOKIES }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
 
       - name: Commit and push changes
         run: |

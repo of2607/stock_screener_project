@@ -8,13 +8,17 @@ class SupabaseUploader(Uploader):
     def __init__(self, url: str, key: str, bucket: str):
         self.url = url
         self.key = key
-        self.bucket = bucket
+        # bucket 設定可能包含資料夾前綴（例如 "public-data/reports"），
+        # 但 Supabase Storage 的 bucket 名稱本身不能含 "/"，需拆開
+        self.bucket, _, self.prefix = bucket.partition("/")
         self.client: Client = create_client(url, key)
 
     def upload(self, file_path: str, dest_path: Optional[str] = None) -> None:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"[SupabaseUploader] 檔案不存在: {file_path}")
         file_name = self._resolve_file_name(file_path, dest_path)
+        if self.prefix:
+            file_name = f"{self.prefix}/{file_name}"
         with open(file_path, "rb") as f:
             res = self.client.storage.from_(self.bucket).upload(file_name, f, {"upsert": "true"})
         if hasattr(res, "error") and res.error:
