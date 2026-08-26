@@ -38,6 +38,56 @@ GOOGLE_DRIVE_CREDENTIALS=your_cred.json
   - 請降低抓取頻率，或升級 API 會員方案
   - 檢查金鑰、網路連線與雲端服務狀態
 
+### 盈再表 Cookies 維護（重要，容易忘記）
+
+盈再表（stocks.ddns.net）用 cookie 登入，`.ASPXAUTH` 有效期只有數天，過期後本地抓取與
+GitHub Actions 排程都會失敗。相關程式碼見 `app/downloaders/yingzaibiao_downloader.py`。
+
+**1. 驗證本地 cookies 是否還有效**
+```bash
+app/venv/bin/python test_yingzaibiao_cookies.py
+```
+會檢查 `.ASPXAUTH` 過期時間，並實際訪問下載頁確認是否被導回登入頁。
+
+**2. Cookies 過期了怎麼重新取得**
+
+先在專案根目錄 `.env` 設定帳密（不存在的話要自己建立）：
+```
+YINGZAIBIAO_USERNAME=你的帳號
+YINGZAIBIAO_PASSWORD=你的密碼
+```
+
+執行抓取（若舊 `.cookies` 已過期，程式會自動 fallback 改用帳密登入）：
+```bash
+set -a && source .env && set +a && cd app && venv/bin/python processors/fetch_yingzaibiao.py
+```
+> ⚠️ 一定要先 `cd app` 再執行！`settings.py` 裡的資料路徑都是相對路徑（例如
+> `datas/raw_data/...`），GitHub Actions 也是設定 `working-directory: app` 執行。
+> 如果從專案根目錄直接跑，cookies 會寫到別的地方，`app/datas/raw_data/yingzaibiao/.cookies`
+> 不會被更新，之後貼到 GitHub Secret 的還是舊的過期 cookie（曾經因此踩過雷）。
+執行後會跳出實體 Chrome 視窗：
+1. 帳密自動輸入後**暫停 15 秒**，若跳出 reCAPTCHA 要手動完成驗證
+2. 完成後自動登入、下載台/美/日股資料
+3. 成功後新 cookies 會自動寫回本地 `app/datas/raw_data/yingzaibiao/.cookies`
+
+**3. 同步更新 GitHub Actions 用的 Secret**
+
+上面流程跑完後，本地 `.cookies` 已更新，但 GitHub Actions（`.github/workflows/auto-summary-report.yml`）
+是讀取 Secret `YINGZAIBIAO_COOKIES`，需要手動同步，否則排程仍會用舊 cookie 失敗：
+```bash
+app/venv/bin/python -c "
+import json, base64
+with open('app/datas/raw_data/yingzaibiao/.cookies') as f:
+    cookies = json.load(f)
+print(base64.b64encode(json.dumps(cookies).encode()).decode())
+"
+```
+把印出的 base64 字串複製，貼到 GitHub repo → **Settings → Secrets and variables → Actions →
+YINGZAIBIAO_COOKIES**，更新既有的值即可（`YINGZAIBIAO_USERNAME` / `YINGZAIBIAO_PASSWORD` 這兩個
+Secret 也要保持有效，作為排程端的備援登入來源）。
+
+> 這串 base64 內含有效的登入憑證，貼完就從終端機/剪貼簿清掉，不要留在檔案或對話紀錄裡。
+
 ---
 
 ## 進階：流程圖與子文件
